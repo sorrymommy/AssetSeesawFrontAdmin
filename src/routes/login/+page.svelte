@@ -1,4 +1,5 @@
 <script>
+  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import Button from '$lib/components/Button.svelte';
   import { APP_CONFIG } from '$lib/constants';
@@ -10,9 +11,27 @@
   let isLoading = $state(false);
   let errorMessage = $state('');
 
+  // 개발 서버(vite dev)에서만: .env의 테스트 계정으로 자동 로그인. 운영 빌드에서는 DEV=false라 동작하지 않는다.
+  const devAutoLogin =
+    import.meta.env.DEV &&
+    import.meta.env.VITE_DEV_AUTO_LOGIN === 'true' &&
+    import.meta.env.VITE_DEV_EMAIL &&
+    import.meta.env.VITE_DEV_PASSWORD;
+
+  onMount(() => {
+    if (!devAutoLogin) return;
+    email = import.meta.env.VITE_DEV_EMAIL;
+    password = import.meta.env.VITE_DEV_PASSWORD;
+    login();
+  });
+
   /** @param {Event} e */
-  async function handleLogin(e) {
+  function handleLogin(e) {
     e.preventDefault();
+    login();
+  }
+
+  async function login() {
     isLoading = true;
     errorMessage = '';
 
