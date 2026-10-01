@@ -30,3 +30,17 @@ export const TX_TYPES = {
   TRADE: ['BUY', 'SELL'],
   CASH: ['DEPOSIT', 'WITHDRAW', 'DIVIDEND', 'INTEREST', 'FEE', 'EXCHANGE_IN', 'EXCHANGE_OUT', 'ADJUST']
 };
+
+/** @type {Record<string, string>} 화면 표시용 거래 유형명 */
+export const TX_TYPE_LABELS = {
+  BUY: '매수',
+  SELL: '매도',
+  DEPOSIT: '입금',
+  WITHDRAW: '출금',
+  DIVIDEND: '배당',
+  INTEREST: '이자',
+  FEE: '수수료',
+  EXCHANGE_IN: '환전입금',
+  EXCHANGE_OUT: '환전출금',
+  ADJUST: '조정'
+};
