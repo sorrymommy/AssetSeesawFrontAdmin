@@ -9,10 +9,12 @@
   import Modal from '$lib/components/common/Modal.svelte';
   import { BUTTON_COLORS } from '$lib/constants.js';
   import { portfolioApi } from '$lib/api/portfolioApi';
+  import { accountApi } from '$lib/api/accountApi';
 
   const columns = [
     { header: '이름', name: 'name', sortable: true },
     { header: '설명', name: 'description', minWidth: 240 },
+    { header: '연결 계좌수', name: 'accountCount', align: 'center', width: 110 },
     { header: '활성', name: 'isActive', align: 'center', width: 80, formatter: (/** @type {any} */ { value }) => (value ? 'Y' : 'N') },
     { header: '생성일', name: 'createdAt', align: 'center', sortable: true, formatter: (/** @type {any} */ { value }) => (value ? String(value).slice(0, 10) : '') }
   ];
@@ -24,6 +26,13 @@
   /** @type {number|null} 수정 대상 id (null = 신규) */
   let editingId = $state(null);
   let form = $state({ name: '', description: '', isActive: true });
+
+  /** @type {any[]} 목록의 포트폴리오 (현재 귀속 계좌 id 포함) */
+  let portfolios = [];
+  /** @type {any} 계좌 연결관리 대상 포트폴리오 */
+  let linkTarget = $state(null);
+  /** @type {Array<{accountId:number, label:string, isActive:boolean, linkedTo:string|null, checked:boolean}>} */
+  let linkAccounts = $state([]);
 
   /** @param {unknown} error */
   function errorMessage(error) {
@@ -38,8 +47,16 @@
 
   async function loadPortfolios() {
     try {
-      const list = await portfolioApi.list();
-      grid?.resetData(list ?? []);
+      const list = (await portfolioApi.list()) ?? [];
+      // 포트폴리오별 현재 귀속 계좌 (end_date 없는 연결) — 연결 계좌수 표시와 연결관리 팝업에 쓴다
+      portfolios = await Promise.all(
+        list.map(async (/** @type {any} */ p) => {
+          const links = (await portfolioApi.accounts(p.portfolioId)) ?? [];
+          const accountIds = links.filter((/** @type {any} */ l) => !l.endDate).map((/** @type {any} */ l) => l.accountId);
+          return { ...p, accountIds, accountCount: accountIds.length };
+        })
+      );
+      grid?.resetData(portfolios);
     } catch (error) {
       console.error('Failed to load portfolios:', error);
       alert(`포트폴리오 목록을 불러오지 못했습니다.\n${errorMessage(error)}`);
@@ -82,6 +99,60 @@
     }
   }
 
+  /** 계좌 연결관리 — 체크한 포트폴리오 1건 대상 */
+  async function openLink() {
+    const rows = grid?.getCheckedRows() ?? [];
+    if (rows.length !== 1) {
+      alert('계좌를 연결할 포트폴리오를 1건만 체크하세요.');
+      return;
+    }
+    const target = portfolios.find((p) => p.portfolioId === rows[0].portfolioId);
+    if (!target) return;
+    try {
+      const accounts = (await accountApi.list()) ?? [];
+      /** @type {Record<number, string>} 다른 포트폴리오에 귀속 중인 계좌 → 포트폴리오명 */
+      const linkedElsewhere = {};
+      for (const p of portfolios) {
+        if (p.portfolioId === target.portfolioId) continue;
+        for (const id of p.accountIds) linkedElsewhere[id] = p.name;
+      }
+      linkAccounts = accounts.map((/** @type {any} */ a) => ({
+        accountId: a.accountId,
+        label: `${a.name} (${a.broker} ${a.accountNumber})`,
+        isActive: a.isActive,
+        linkedTo: linkedElsewhere[a.accountId] ?? null,
+        checked: target.accountIds.includes(a.accountId)
+      }));
+      linkTarget = target;
+      isLinkOpen = true;
+    } catch (error) {
+      console.error('Failed to load accounts:', error);
+      alert(`계좌 목록을 불러오지 못했습니다.
+${errorMessage(error)}`);
+    }
+  }
+
+  async function saveLinks() {
+    const target = linkTarget;
+    if (!target) return;
+    const accountIds = linkAccounts.filter((a) => a.checked).map((a) => a.accountId);
+    try {
+      // 귀속 동기화는 수정 API의 accountIds로 한다 (빠진 계좌는 오늘로 종료, 새 계좌는 오늘부터 귀속)
+      await portfolioApi.update(target.portfolioId, {
+        name: target.name,
+        description: target.description ?? null,
+        isActive: target.isActive,
+        accountIds
+      });
+      await loadPortfolios();
+    } catch (error) {
+      console.error('Failed to save account links:', error);
+      alert(`계좌 연결 저장에 실패했습니다.
+${errorMessage(error)}`);
+      isLinkOpen = true; // 선택 상태를 유지한 채 팝업을 다시 연다
+    }
+  }
+
   async function removeChecked() {
     const rows = grid?.getCheckedRows() ?? [];
     if (rows.length === 0) {
@@ -103,7 +174,7 @@
   const actions = [
     { label: 'Search', color: BUTTON_COLORS.INDIGO, iconType: 'search', onClick: loadPortfolios },
     { label: 'Add', color: BUTTON_COLORS.EMERALD, iconType: 'add', onClick: openAdd },
-    { label: '계좌 연결관리', color: BUTTON_COLORS.PURPLE, onClick: () => (isLinkOpen = true) },
+    { label: '계좌 연결관리', color: BUTTON_COLORS.PURPLE, onClick: openLink },
     { label: 'Remove', color: BUTTON_COLORS.ROSE, iconType: 'remove', onClick: removeChecked }
   ];
 </script>
@@ -126,10 +197,21 @@
     {/if}
   </Modal>
 
-  <Modal bind:isOpen={isLinkOpen} title="계좌 연결관리" width="max-w-lg" onSave={() => { /* TODO: 계좌 연결 동기화 (update accountIds) */ }}>
-    <p class="text-sm text-gray-500">이 포트폴리오에 연결할 계좌를 선택합니다. (한 계좌는 동시에 하나의 포트폴리오에만 귀속)</p>
-    <div class="border border-gray-200 rounded-md p-3 text-sm text-gray-400 min-h-[120px] flex items-center justify-center">
-      계좌 선택 목록 (연동 예정)
+  <Modal bind:isOpen={isLinkOpen} title="계좌 연결관리 — {linkTarget?.name ?? ''}" width="max-w-lg" onSave={saveLinks}>
+    <p class="text-sm text-gray-500">이 포트폴리오에 연결할 계좌를 선택합니다. 한 계좌는 동시에 하나의 포트폴리오에만 귀속됩니다.</p>
+    <div class="border border-gray-200 rounded-md divide-y divide-gray-100 max-h-80 overflow-y-auto">
+      {#each linkAccounts as a (a.accountId)}
+        <label class="flex items-center gap-3 p-2 text-sm {a.linkedTo ? 'text-gray-400 cursor-not-allowed' : 'cursor-pointer'}">
+          <input type="checkbox" bind:checked={a.checked} disabled={a.linkedTo !== null} class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50" />
+          <span class="flex-1">{a.label}{a.isActive ? '' : ' · 비활성'}</span>
+          {#if a.linkedTo}
+            <span class="text-xs">'{a.linkedTo}'에 연결됨</span>
+          {/if}
+        </label>
+      {:else}
+        <p class="p-3 text-sm text-gray-400 text-center">등록된 계좌가 없습니다. 거래·계좌 → 계좌 관리에서 먼저 등록하세요.</p>
+      {/each}
     </div>
+    <p class="text-xs text-gray-400">체크를 해제한 계좌는 오늘 날짜로 연결이 종료되고, 새로 체크한 계좌는 오늘부터 연결됩니다.</p>
   </Modal>
 </StandardListPage>
