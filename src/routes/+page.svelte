@@ -16,6 +16,7 @@
   // ── 대분류 2. 포트폴리오
   import PortfolioManagement from '$lib/components/contents/portfolio/PortfolioManagement.svelte';
   import TargetWeightManagement from '$lib/components/contents/portfolio/TargetWeightManagement.svelte';
+  import AssetMappingManagement from '$lib/components/contents/portfolio/AssetMappingManagement.svelte';
   import PortfolioValuation from '$lib/components/contents/portfolio/PortfolioValuation.svelte';
   // ── 대분류 3. 리밸런싱
   import RebalancingRunList from '$lib/components/contents/rebalancing/RebalancingRunList.svelte';
@@ -65,12 +66,12 @@
 
   const gnbItems = $derived(
     [
+      ...(isAdmin ? [{ id: 'system', label: '시스템 관리' }] : []),
+      { id: 'master', label: '기준정보' },
       { id: 'dashboard', label: '대시보드' },
       { id: 'portfolio', label: '포트폴리오' },
-      { id: 'rebalancing', label: '리밸런싱' },
       { id: 'trade', label: '거래·계좌' },
-      { id: 'master', label: '기준정보' },
-      ...(isAdmin ? [{ id: 'system', label: '시스템 관리' }] : [])
+      { id: 'rebalancing', label: '리밸런싱' }
     ].map((g) => ({
       ...g,
       href: '#',
@@ -91,7 +92,8 @@
     portfolio: [
       { label: '포트폴리오 관리', icon: ICON.briefcase, children: [
         menuTab('portfolios', '포트폴리오 관리', PortfolioManagement),
-        menuTab('target-weights', '목표비율 관리', TargetWeightManagement)
+        menuTab('target-weights', '목표비율 관리', TargetWeightManagement),
+        menuTab('asset-mappings', '종목 구분 연결', AssetMappingManagement)
       ] },
       { label: '평가', icon: ICON.chart, children: [menuTab('valuation', '포트폴리오 평가', PortfolioValuation)] }
     ],
