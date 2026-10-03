@@ -1,17 +1,17 @@
 <script>
   /**
-   * 공통 코드 관리 [구현][ADMIN]
-   * 그룹 선택 → 코드 목록. 표시명·정렬순서·설명(일반 그룹은 사용 여부까지)을 그리드에서 고친 뒤 [Save]로 바뀐 행만 저장
-   * 그룹: [그룹 추가](항상 일반 그룹) / [그룹 수정](이름·설명·순서) / [그룹 삭제](일반 그룹, 코드가 없을 때만)
-   * - 시스템 그룹(거래 유형·역할·상태·리밸런싱): 코드값이 로직에 연결 — 추가·삭제·사용중지 불가
-   * - 일반 그룹(증권사·통화·시장): [Add]로 추가, [Remove]로 삭제 (데이터에서 쓰는 코드는 삭제 대신 사용중지)
-   * 변경 후 공통 코드 저장소를 다시 불러와 다른 화면의 표시명·선택 목록에 바로 반영한다.
+   * 공통 코드 관리 [구현][ADMIN] — 마스터(그룹)·디테일(코드) 그리드
+   * - 왼쪽 그룹 그리드에서 행을 고르면 오른쪽에 그 그룹의 코드가 나온다
+   * - 두 그리드 모두 ✎ 컬럼을 더블클릭해 고치고, [행 추가]로 새 행, [삭제]로 체크한 행 삭제, [저장]으로 반영
+   * - 그룹 코드·코드값은 새 행에서만 입력 (저장 후 변경 불가)
+   * - 시스템 그룹: 코드 추가·삭제·사용중지 불가, 그룹 삭제 불가 (표시명·순서·설명만)
+   * - 화면에서 만드는 그룹은 일반 그룹. 증권사·통화·시장 그룹과 코드가 남은 그룹은 삭제 불가 (서버 검증)
+   * 저장 후 공통 코드 저장소를 다시 불러와 다른 화면의 표시명·선택 목록에 바로 반영한다.
    * API: commonCodeApi.list / createGroup / updateGroup / removeGroup / createCode / updateCode / removeCode
    */
-  import { tick } from 'svelte';
-  import StandardListPage from '$lib/components/common/StandardListPage.svelte';
-  import Modal from '$lib/components/common/Modal.svelte';
-  import LookupComboBox from '$lib/components/controls/LookupComboBox.svelte';
+  import { onMount, onDestroy } from 'svelte';
+  import 'tui-grid/dist/tui-grid.css';
+  import UiButton from '$lib/components/controls/Button.svelte';
   import { BUTTON_COLORS } from '$lib/constants.js';
   import { commonCodeApi } from '$lib/api/commonCodeApi';
   import { codes, loadCodes } from '$lib/stores/codeStore';
@@ -20,337 +20,373 @@
     { text: '사용', value: 'Y' },
     { text: '사용중지', value: 'N' }
   ];
+  const activeText = (/** @type {any} */ { value }) => (value === 'Y' ? '사용' : '사용중지');
+
+  /** @type {any[]} tui-grid 컬럼 정의 */
+  const groupColumns = [
+    { header: '그룹 코드 ✎', name: 'groupCode', minWidth: 130, editor: 'text' },
+    { header: '그룹명 ✎', name: 'name', minWidth: 120, editor: 'text' },
+    { header: '순서 ✎', name: 'sortOrder', align: 'right', width: 70, editor: 'text' },
+    { header: '구분', name: 'typeLabel', align: 'center', width: 70 },
+    { header: '코드수', name: 'codeCount', align: 'right', width: 70 },
+    { header: '설명 ✎', name: 'description', minWidth: 160, editor: 'text' }
+  ];
 
   /**
-   * 그룹 종류에 따라 편집 가능한 컬럼이 다르다 (시스템 그룹은 사용 여부 편집 불가).
+   * 시스템 그룹은 사용 여부를 고칠 수 없어 컬럼 편집기를 뺀다
    * @param {boolean} isSystem
+   * @returns {any[]}
    */
-  function buildColumns(isSystem) {
+  function buildCodeColumns(isSystem) {
     return [
-      { header: '코드', name: 'code', width: 160, sortable: true },
-      { header: '표시명 ✎', name: 'name', minWidth: 160, editor: 'text' },
-      { header: '정렬순서 ✎', name: 'sortOrder', align: 'right', width: 100, editor: 'text', sortable: true },
+      { header: '코드 ✎', name: 'code', minWidth: 120, editor: 'text' },
+      { header: '표시명 ✎', name: 'name', minWidth: 120, editor: 'text' },
+      { header: '순서 ✎', name: 'sortOrder', align: 'right', width: 70, editor: 'text' },
       isSystem
-        ? { header: '사용', name: 'activeYn', align: 'center', width: 100, formatter: (/** @type {any} */ { value }) => (value === 'Y' ? '사용' : '사용중지') }
-        : {
-            header: '사용 ✎',
-            name: 'activeYn',
-            align: 'center',
-            width: 110,
-            formatter: 'listItemText',
-            editor: { type: 'select', options: { instantApply: true, listItems: ACTIVE_ITEMS } }
-          },
-      { header: '설명 ✎', name: 'description', minWidth: 240, editor: 'text' }
+        ? { header: '사용', name: 'activeYn', align: 'center', width: 90, formatter: activeText }
+        : { header: '사용 ✎', name: 'activeYn', align: 'center', width: 100, formatter: 'listItemText', editor: { type: 'select', options: { instantApply: true, listItems: ACTIVE_ITEMS } } },
+      { header: '설명 ✎', name: 'description', minWidth: 160, editor: 'text' }
     ];
   }
 
+  /** @type {HTMLElement} */
+  let groupEl;
+  /** @type {HTMLElement} */
+  let codeEl;
   /** @type {any} */
-  let grid;
-  let groupCode = $state('');
-  let loadedGroupCode = '';
-  const groupOptions = $derived(
-    Object.values($codes).map((g) => ({ value: g.groupCode, label: `${g.name} (${g.groupCode})${g.isSystem ? ' · 시스템' : ''}` }))
-  );
-  const group = $derived($codes[groupCode]);
+  let groupGrid;
+  /** @type {any} */
+  let codeGrid;
 
-  let isAddOpen = $state(false);
-  let form = $state({ code: '', name: '', description: '' });
-
-  // 그룹 추가·수정 팝업 (editingGroup = null 이면 추가)
-  let isGroupOpen = $state(false);
-  /** @type {string|null} */
-  let editingGroup = $state(null);
-  let groupForm = $state({ groupCode: '', name: '', description: '', sortOrder: '' });
+  /** 디테일에 표시 중인 그룹 코드 (새 그룹 행이면 null) */
+  let selectedGroup = $state(/** @type {string|null} */ (null));
+  const group = $derived(selectedGroup ? $codes[selectedGroup] : undefined);
+  let isNewGroupSelected = $state(false);
 
   /** @param {unknown} error */
   function errorMessage(error) {
     return error instanceof Error ? error.message : String(error);
   }
 
-  /** @returns {any[]} 바뀐 행 (저장 대상) */
-  function changedRows() {
-    const updated = /** @type {any[]} */ (grid?.getModifiedRows()?.updatedRows ?? []);
-    return updated.filter(
-      (r) => r.name !== r.original.name || String(r.sortOrder) !== String(r.original.sortOrder) || r.activeYn !== r.original.activeYn || (r.description ?? '') !== (r.original.description ?? '')
-    );
-  }
+  const trimmed = (/** @type {any} */ v) => String(v ?? '').trim();
+  const isInteger = (/** @type {any} */ v) => /^-?\d+$/.test(trimmed(v));
+  /** 빈 순서는 null(서버가 맨 뒤로), 아니면 정수 @param {any} v */
+  const sortOrNull = (v) => (trimmed(v) === '' ? null : Number(trimmed(v)));
 
-  /** @param {any} g */
-  async function handleReady(g) {
-    grid = g;
+  // ==================== 그리드 생성 ====================
+
+  onMount(async () => {
+    const { default: Grid } = await import('tui-grid');
+    /** @type {any} 두 그리드 공통 옵션 */
+    const common = { data: [], scrollX: true, scrollY: true, bodyHeight: 'fitToParent', rowHeaders: ['rowNum', 'checkbox'], columnOptions: { resizable: true } };
+    groupGrid = new Grid({ ...common, el: groupEl, columns: groupColumns });
+    codeGrid = new Grid({ ...common, el: codeEl, columns: buildCodeColumns(true) });
+
+    // 그룹 행을 바꾸면 디테일을 그 그룹으로. 디테일에 저장 안 된 변경이 있으면 확인
+    groupGrid.on('focusChange', (/** @type {any} */ ev) => {
+      if (ev.rowKey === ev.prevRowKey || ev.rowKey === null || ev.rowKey === undefined) return;
+      if (!confirmDiscardCodes()) {
+        ev.stop();
+        return;
+      }
+      showGroup(groupGrid.getRow(ev.rowKey));
+    });
+
+    window.addEventListener('resize', refreshLayout);
     try {
       await loadCodes(true);
-      groupCode = Object.keys($codes)[0] ?? '';
-      renderGroup();
+      renderGroups();
     } catch (error) {
       alert(`공통 코드를 불러오지 못했습니다.\n${errorMessage(error)}`);
     }
+  });
+
+  onDestroy(() => {
+    groupGrid?.destroy();
+    codeGrid?.destroy();
+    window.removeEventListener('resize', refreshLayout);
+  });
+
+  function refreshLayout() {
+    groupGrid?.refreshLayout();
+    codeGrid?.refreshLayout();
   }
 
-  /** 저장소의 현재 그룹 코드를 그리드에 그린다 */
-  function renderGroup() {
-    loadedGroupCode = groupCode;
-    const g = $codes[groupCode];
-    if (!grid || !g) return;
-    grid.setColumns(buildColumns(g.isSystem));
-    grid.resetData(
-      g.codes.map((c) => {
-        const row = { code: c.code, name: c.name, sortOrder: c.sortOrder, activeYn: c.isActive ? 'Y' : 'N', description: c.description ?? '' };
-        return { ...row, original: { ...row } };
-      })
+  // ==================== 마스터 (그룹) ====================
+
+  /** 저장소의 그룹을 마스터 그리드에 그리고, 선택했던 그룹을 다시 선택한다 @param {string|null} [keep] */
+  function renderGroups(keep = selectedGroup) {
+    const rows = Object.values($codes).map((g) => {
+      const row = { groupCode: g.groupCode, name: g.name, sortOrder: g.sortOrder, description: g.description ?? '' };
+      return { ...row, typeLabel: g.isSystem ? '시스템' : '일반', isSystem: g.isSystem, codeCount: g.codes.length, isNew: false, original: { ...row } };
+    });
+    groupGrid.resetData(rows);
+    // 저장된 그룹의 그룹 코드는 바꿀 수 없다
+    for (const r of groupGrid.getData()) groupGrid.disableCell(r.rowKey, 'groupCode');
+
+    const target = groupGrid.getData().find((/** @type {any} */ r) => r.groupCode === keep) ?? groupGrid.getData()[0];
+    showGroup(target ?? null);
+    if (target) groupGrid.focus(target.rowKey, 'name');
+    setTimeout(refreshLayout, 50);
+  }
+
+  /** @returns {any[]} 새 그룹 행 */
+  function newGroupRows() {
+    return groupGrid?.getData().filter((/** @type {any} */ r) => r.isNew) ?? [];
+  }
+
+  /** @returns {any[]} 값이 바뀐 기존 그룹 행 */
+  function changedGroupRows() {
+    return (groupGrid?.getData() ?? []).filter(
+      (/** @type {any} */ r) =>
+        !r.isNew && (trimmed(r.name) !== r.original.name || trimmed(r.sortOrder) !== String(r.original.sortOrder) || trimmed(r.description) !== r.original.description)
     );
   }
 
-  async function reload() {
-    try {
-      await loadCodes(true);
-      renderGroup();
-    } catch (error) {
-      alert(`공통 코드를 불러오지 못했습니다.\n${errorMessage(error)}`);
-    }
+  function addGroupRow() {
+    groupGrid.finishEditing();
+    groupGrid.appendRow({ groupCode: '', name: '', sortOrder: '', description: '', typeLabel: '일반', isSystem: false, codeCount: 0, isNew: true }, { focus: true });
   }
 
-  /** 저장 안 된 변경이 있으면 확인 후 진행 */
-  function confirmDiscard() {
-    grid?.finishEditing();
-    const n = changedRows().length;
-    return n === 0 || confirm(`저장하지 않은 변경 ${n}건이 있습니다. 무시하고 진행할까요?`);
+  async function saveGroups() {
+    groupGrid.finishEditing();
+    const created = newGroupRows();
+    const updated = changedGroupRows();
+    if (created.length === 0 && updated.length === 0) return alert('변경된 그룹이 없습니다.');
+
+    for (const r of [...created, ...updated]) {
+      if (r.isNew && !trimmed(r.groupCode)) return alert('새 그룹의 그룹 코드를 입력하세요.');
+      if (!trimmed(r.name)) return alert(`${trimmed(r.groupCode) || '새 그룹'}: 그룹명을 입력하세요.`);
+      if (trimmed(r.sortOrder) !== '' && !isInteger(r.sortOrder)) return alert(`${trimmed(r.groupCode)}: 순서는 정수로 입력하세요.`);
+    }
+
+    /** @type {string[]} */
+    const failures = [];
+    let keep = selectedGroup;
+    for (const r of created) {
+      const groupCode = trimmed(r.groupCode).toUpperCase();
+      try {
+        await commonCodeApi.createGroup({ groupCode, name: trimmed(r.name), description: trimmed(r.description) || null, sortOrder: sortOrNull(r.sortOrder) });
+        keep = groupCode; // 새로 만든 그룹을 선택해 바로 코드를 넣을 수 있게
+      } catch (error) {
+        failures.push(`${groupCode}: ${errorMessage(error)}`);
+      }
+    }
+    for (const r of updated) {
+      try {
+        await commonCodeApi.updateGroup(r.groupCode, { name: trimmed(r.name), description: trimmed(r.description) || null, sortOrder: Number(trimmed(r.sortOrder) || 0) });
+      } catch (error) {
+        failures.push(`${r.groupCode}: ${errorMessage(error)}`);
+      }
+    }
+    if (failures.length > 0) alert(`일부 그룹을 저장하지 못했습니다.\n${failures.join('\n')}`);
+    await reloadAll(keep);
   }
 
-  function handleGroupChange() {
-    if (!confirmDiscard()) {
-      groupCode = loadedGroupCode;
-      return;
-    }
-    renderGroup();
-  }
+  async function removeGroups() {
+    groupGrid.finishEditing();
+    const rows = /** @type {any[]} */ (groupGrid.getCheckedRows());
+    if (rows.length === 0) return alert('삭제할 그룹을 체크하세요.');
+    const system = rows.filter((r) => r.isSystem);
+    if (system.length > 0) return alert(`시스템 코드 그룹은 삭제할 수 없습니다: ${system.map((r) => r.groupCode).join(', ')}`);
+    if (!confirm(`체크한 그룹 ${rows.length}개를 삭제할까요?\n코드가 남아 있는 그룹은 삭제되지 않습니다.`)) return;
 
-  async function save() {
-    grid?.finishEditing();
-    const rows = changedRows();
-    if (rows.length === 0) {
-      alert('변경된 코드가 없습니다.');
-      return;
-    }
-    for (const r of rows) {
-      if (!String(r.name ?? '').trim()) return alert(`${r.code}: 표시명을 입력하세요.`);
-      if (!/^-?\d+$/.test(String(r.sortOrder).trim())) return alert(`${r.code}: 정렬순서는 정수로 입력하세요.`);
-    }
     /** @type {string[]} */
     const failures = [];
     for (const r of rows) {
+      if (r.isNew) {
+        groupGrid.removeRow(r.rowKey); // 저장 전 행은 화면에서만 지운다
+        continue;
+      }
       try {
-        await commonCodeApi.updateCode(groupCode, r.code, {
-          name: String(r.name).trim(),
-          description: String(r.description ?? '').trim() || null,
-          sortOrder: Number(String(r.sortOrder).trim()),
-          isActive: r.activeYn === 'Y'
-        });
+        await commonCodeApi.removeGroup(r.groupCode);
+      } catch (error) {
+        failures.push(`${r.groupCode}: ${errorMessage(error)}`);
+      }
+    }
+    if (failures.length > 0) alert(`일부 그룹을 삭제하지 못했습니다.\n${failures.join('\n')}`);
+    if (rows.some((r) => !r.isNew)) await reloadAll(selectedGroup);
+  }
+
+  // ==================== 디테일 (코드) ====================
+
+  /** 마스터에서 고른 그룹의 코드를 디테일에 그린다 @param {any} row 그룹 행 (없으면 비움) */
+  function showGroup(row) {
+    if (!row || row.isNew) {
+      selectedGroup = null;
+      isNewGroupSelected = !!row?.isNew;
+      codeGrid.setColumns(buildCodeColumns(false));
+      codeGrid.resetData([]);
+      return;
+    }
+    selectedGroup = row.groupCode;
+    isNewGroupSelected = false;
+    const g = $codes[row.groupCode];
+    codeGrid.setColumns(buildCodeColumns(g?.isSystem ?? true));
+    codeGrid.resetData(
+      (g?.codes ?? []).map((c) => {
+        const r = { code: c.code, name: c.name, sortOrder: c.sortOrder, activeYn: c.isActive ? 'Y' : 'N', description: c.description ?? '' };
+        return { ...r, isNew: false, original: { ...r } };
+      })
+    );
+    for (const r of codeGrid.getData()) codeGrid.disableCell(r.rowKey, 'code');
+    setTimeout(refreshLayout, 50);
+  }
+
+  /** @returns {any[]} 새 코드 행 */
+  function newCodeRows() {
+    return codeGrid?.getData().filter((/** @type {any} */ r) => r.isNew) ?? [];
+  }
+
+  /** @returns {any[]} 값이 바뀐 기존 코드 행 */
+  function changedCodeRows() {
+    return (codeGrid?.getData() ?? []).filter(
+      (/** @type {any} */ r) =>
+        !r.isNew &&
+        (trimmed(r.name) !== r.original.name || trimmed(r.sortOrder) !== String(r.original.sortOrder) || r.activeYn !== r.original.activeYn || trimmed(r.description) !== r.original.description)
+    );
+  }
+
+  /** 디테일에 저장 안 된 변경이 있으면 확인 */
+  function confirmDiscardCodes() {
+    codeGrid?.finishEditing();
+    const n = newCodeRows().length + changedCodeRows().length;
+    return n === 0 || confirm(`코드에 저장하지 않은 변경 ${n}건이 있습니다. 무시하고 이동할까요?`);
+  }
+
+  function addCodeRow() {
+    if (isNewGroupSelected) return alert('새 그룹을 먼저 저장한 뒤 코드를 추가하세요.');
+    if (!group) return alert('왼쪽에서 그룹을 선택하세요.');
+    if (group.isSystem) return alert('시스템 코드 그룹에는 코드를 추가할 수 없습니다. 표시명·순서·설명만 수정할 수 있습니다.');
+    codeGrid.finishEditing();
+    codeGrid.appendRow({ code: '', name: '', sortOrder: '', activeYn: 'Y', description: '', isNew: true }, { focus: true });
+  }
+
+  async function saveCodes() {
+    if (!group) return;
+    codeGrid.finishEditing();
+    const created = newCodeRows();
+    const updated = changedCodeRows();
+    if (created.length === 0 && updated.length === 0) return alert('변경된 코드가 없습니다.');
+
+    for (const r of [...created, ...updated]) {
+      if (r.isNew && !trimmed(r.code)) return alert('새 코드의 코드값을 입력하세요.');
+      if (!trimmed(r.name)) return alert(`${trimmed(r.code) || '새 코드'}: 표시명을 입력하세요.`);
+      if (trimmed(r.sortOrder) !== '' && !isInteger(r.sortOrder)) return alert(`${trimmed(r.code)}: 순서는 정수로 입력하세요.`);
+    }
+
+    const groupCode = group.groupCode;
+    /** @type {string[]} */
+    const failures = [];
+    for (const r of created) {
+      const code = trimmed(r.code);
+      const description = trimmed(r.description) || null;
+      try {
+        const saved = await commonCodeApi.createCode(groupCode, { code, name: trimmed(r.name), description, sortOrder: sortOrNull(r.sortOrder) });
+        // 추가 API는 항상 '사용'으로 만들므로, 새 행을 '사용중지'로 넣었으면 이어서 반영한다
+        if (r.activeYn === 'N') {
+          await commonCodeApi.updateCode(groupCode, code, { name: trimmed(r.name), description, sortOrder: saved?.sortOrder ?? 0, isActive: false });
+        }
+      } catch (error) {
+        failures.push(`${code}: ${errorMessage(error)}`);
+      }
+    }
+    for (const r of updated) {
+      try {
+        await commonCodeApi.updateCode(groupCode, r.code, { name: trimmed(r.name), description: trimmed(r.description) || null, sortOrder: Number(trimmed(r.sortOrder) || 0), isActive: r.activeYn === 'Y' });
       } catch (error) {
         failures.push(`${r.code}: ${errorMessage(error)}`);
       }
     }
     if (failures.length > 0) alert(`일부 코드를 저장하지 못했습니다.\n${failures.join('\n')}`);
-    await reload();
+    await reloadAll(groupCode);
   }
 
-  function openAdd() {
+  async function removeCodes() {
     if (!group) return;
-    if (group.isSystem) {
-      alert('시스템 코드 그룹에는 코드를 추가할 수 없습니다. 표시명·순서·설명만 수정할 수 있습니다.');
-      return;
-    }
-    if (!confirmDiscard()) return;
-    form = { code: '', name: '', description: '' };
-    isAddOpen = true;
-  }
+    codeGrid.finishEditing();
+    const rows = /** @type {any[]} */ (codeGrid.getCheckedRows());
+    if (rows.length === 0) return alert('삭제할 코드를 체크하세요.');
+    if (group.isSystem) return alert('시스템 코드는 삭제할 수 없습니다.');
+    if (!confirm(`체크한 코드 ${rows.length}개를 삭제할까요?\n${rows.map((r) => `${trimmed(r.code) || '(새 행)'} ${trimmed(r.name)}`).join(', ')}`)) return;
 
-  /** 검증 실패 시 Modal이 닫힌 뒤 다시 연다 @param {string} message */
-  async function reject(message) {
-    alert(message);
-    await tick();
-    isAddOpen = true;
-  }
-
-  // ==================== 그룹 ====================
-
-  function openGroupAdd() {
-    if (!confirmDiscard()) return;
-    editingGroup = null;
-    groupForm = { groupCode: '', name: '', description: '', sortOrder: '' };
-    isGroupOpen = true;
-  }
-
-  function openGroupEdit() {
-    if (!group || !confirmDiscard()) return;
-    editingGroup = group.groupCode;
-    groupForm = { groupCode: group.groupCode, name: group.name, description: group.description ?? '', sortOrder: String(group.sortOrder ?? 0) };
-    isGroupOpen = true;
-  }
-
-  /** 검증 실패 시 그룹 팝업을 다시 연다 @param {string} message */
-  async function rejectGroup(message) {
-    alert(message);
-    await tick();
-    isGroupOpen = true;
-  }
-
-  async function saveGroup() {
-    const name = groupForm.name.trim();
-    const description = groupForm.description.trim() || null;
-    if (!name) return rejectGroup('그룹명을 입력하세요.');
-    const sortText = String(groupForm.sortOrder ?? '').trim();
-    if (sortText !== '' && !/^-?\d+$/.test(sortText)) return rejectGroup('정렬순서는 정수로 입력하세요.');
-    try {
-      if (editingGroup === null) {
-        const newCode = groupForm.groupCode.trim().toUpperCase();
-        if (!newCode) return rejectGroup('그룹 코드를 입력하세요.');
-        await commonCodeApi.createGroup({ groupCode: newCode, name, description, sortOrder: sortText === '' ? null : Number(sortText) });
-        await loadCodes(true);
-        groupCodeSelect(newCode); // 새 그룹을 선택해 바로 코드를 추가할 수 있게
-      } else {
-        await commonCodeApi.updateGroup(editingGroup, { name, description, sortOrder: sortText === '' ? 0 : Number(sortText) });
-        await reload();
-      }
-    } catch (error) {
-      alert(`그룹을 저장하지 못했습니다.
-${errorMessage(error)}`);
-      isGroupOpen = true; // 입력값을 유지한 채 팝업을 다시 연다
-    }
-  }
-
-  /** 새로 만든 그룹을 선택해 보여준다 @param {string} code */
-  function groupCodeSelect(code) {
-    groupCode = code;
-    renderGroup();
-  }
-
-  async function removeGroup() {
-    if (!group) return;
-    if (group.isSystem) {
-      alert('시스템 코드 그룹은 삭제할 수 없습니다.');
-      return;
-    }
-    if (!confirm(`'${group.name} (${group.groupCode})' 그룹을 삭제할까요?
-코드가 남아 있으면 삭제되지 않습니다.`)) return;
-    try {
-      await commonCodeApi.removeGroup(group.groupCode);
-      await loadCodes(true);
-      groupCode = Object.keys($codes)[0] ?? '';
-      renderGroup();
-    } catch (error) {
-      alert(`그룹을 삭제하지 못했습니다.
-${errorMessage(error)}`);
-    }
-  }
-
-  async function create() {
-    const code = form.code.trim();
-    const name = form.name.trim();
-    if (!code || !name) return reject('코드와 표시명을 입력하세요.');
-    try {
-      await commonCodeApi.createCode(groupCode, { code, name, description: form.description.trim() || null });
-      await reload();
-    } catch (error) {
-      alert(`추가에 실패했습니다.\n${errorMessage(error)}`);
-      isAddOpen = true; // 입력값을 유지한 채 팝업을 다시 연다
-    }
-  }
-
-  async function removeChecked() {
-    if (!group) return;
-    if (group.isSystem) {
-      alert('시스템 코드는 삭제할 수 없습니다.');
-      return;
-    }
-    const rows = grid?.getCheckedRows() ?? [];
-    if (rows.length === 0) {
-      alert('삭제할 코드를 체크하세요.');
-      return;
-    }
-    if (!confirm(`선택한 코드 ${rows.length}개를 삭제할까요?\n${rows.map((/** @type {any} */ r) => `${r.code} (${r.name})`).join(', ')}`)) return;
     /** @type {string[]} */
     const failures = [];
     for (const r of rows) {
+      if (r.isNew) {
+        codeGrid.removeRow(r.rowKey); // 저장 전 행은 화면에서만 지운다
+        continue;
+      }
       try {
-        await commonCodeApi.removeCode(groupCode, r.code);
+        await commonCodeApi.removeCode(group.groupCode, r.code);
       } catch (error) {
         failures.push(`${r.code}: ${errorMessage(error)}`);
       }
     }
     if (failures.length > 0) alert(`일부 코드를 삭제하지 못했습니다.\n${failures.join('\n')}`);
-    await reload();
+    if (rows.some((r) => !r.isNew)) await reloadAll(group.groupCode);
   }
 
-  const actions = [
-    { label: 'Search', color: BUTTON_COLORS.INDIGO, iconType: 'search', onClick: () => confirmDiscard() && reload() },
-    { label: 'Add', color: BUTTON_COLORS.EMERALD, iconType: 'add', onClick: openAdd },
-    { label: 'Remove', color: BUTTON_COLORS.ROSE, iconType: 'remove', onClick: removeChecked },
-    { label: 'Save', color: BUTTON_COLORS.BLUE, iconType: 'save', onClick: save }
-  ];
+  /** 저장소를 다시 불러와 두 그리드를 다시 그린다 @param {string|null} keep 선택 유지할 그룹 */
+  async function reloadAll(keep) {
+    try {
+      await loadCodes(true);
+      renderGroups(keep);
+    } catch (error) {
+      alert(`공통 코드를 불러오지 못했습니다.\n${errorMessage(error)}`);
+    }
+  }
 
-  const inputClass = 'block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border px-3 py-2';
-  const labelClass = 'block text-sm font-medium text-gray-700 mb-1';
-  const groupButtonClass = 'whitespace-nowrap rounded border px-2 py-1.5 text-xs font-medium';
+  function handleReload() {
+    groupGrid?.finishEditing();
+    const n = newGroupRows().length + changedGroupRows().length;
+    if (n > 0 && !confirm(`그룹에 저장하지 않은 변경 ${n}건이 있습니다. 무시하고 다시 불러올까요?`)) return;
+    if (!confirmDiscardCodes()) return;
+    reloadAll(selectedGroup);
+  }
 </script>
 
-<StandardListPage title="공통 코드 관리" columns={buildColumns(true)} {actions} onReady={handleReady}>
-  {#snippet filters()}
-    <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
-      <LookupComboBox id="cc-group" label="코드 그룹" class="sm:col-span-2" options={groupOptions} bind:value={groupCode} placeholder="" onchange={handleGroupChange} />
-      <div class="sm:col-span-1 lg:col-span-2 flex flex-wrap gap-1.5 items-end">
-        <button type="button" onclick={openGroupAdd} class="{groupButtonClass} text-emerald-700 border-emerald-300 hover:bg-emerald-50">그룹 추가</button>
-        <button type="button" onclick={openGroupEdit} class="{groupButtonClass} text-indigo-700 border-indigo-300 hover:bg-indigo-50">그룹 수정</button>
-        <button type="button" onclick={removeGroup} class="{groupButtonClass} text-rose-700 border-rose-300 hover:bg-rose-50">그룹 삭제</button>
+<div class="absolute inset-0 flex flex-col p-4 gap-3">
+  <div class="flex items-center justify-between gap-4">
+    <div class="min-w-0">
+      <h2 class="text-sm font-semibold text-gray-700">공통 코드 관리</h2>
+      <p class="text-xs text-gray-400">✎ 컬럼을 더블클릭해 고친 뒤 각 영역의 [저장]. 그룹 코드·코드값은 새 행에서만 입력합니다. 데이터에서 쓰는 코드는 삭제 대신 '사용중지'로 바꾸세요.</p>
+    </div>
+    <UiButton label="Search" color={BUTTON_COLORS.INDIGO} iconType="search" onclick={handleReload} />
+  </div>
+
+  <div class="flex-1 min-h-0 flex flex-col lg:flex-row gap-3">
+    <!-- 마스터: 그룹 -->
+    <section class="lg:w-5/12 min-h-[240px] flex-1 lg:flex-none flex flex-col bg-white rounded-lg shadow overflow-hidden">
+      <div class="flex items-center justify-between px-3 py-2 border-b border-gray-100">
+        <span class="text-sm font-semibold text-gray-700">코드 그룹</span>
+        <div class="flex gap-2">
+          <UiButton label="행 추가" color={BUTTON_COLORS.EMERALD} iconType="add" onclick={addGroupRow} />
+          <UiButton label="삭제" color={BUTTON_COLORS.ROSE} iconType="remove" onclick={removeGroups} />
+          <UiButton label="저장" color={BUTTON_COLORS.BLUE} iconType="save" onclick={saveGroups} />
+        </div>
       </div>
-      <div class="sm:col-span-3 lg:col-span-2 text-xs space-y-0.5">
-        {#if group}
-          <div class="text-gray-600">{group.description ?? ''}</div>
-          {#if group.isSystem}
-            <div class="text-amber-600">시스템 코드 — 코드값이 프로그램 동작과 연결돼 있어 표시명·정렬순서·설명만 고칠 수 있습니다.</div>
-          {:else}
-            <div class="text-gray-400">✎ 컬럼을 더블클릭해 고친 뒤 [Save]. 데이터에서 쓰는 코드는 삭제 대신 '사용중지'로 바꾸세요 (새 입력 목록에서만 빠짐).</div>
+      <div class="flex-1 min-h-0 relative"><div bind:this={groupEl} class="absolute inset-0"></div></div>
+    </section>
+
+    <!-- 디테일: 선택한 그룹의 코드 -->
+    <section class="lg:w-7/12 min-h-[240px] flex-1 lg:flex-none flex flex-col bg-white rounded-lg shadow overflow-hidden">
+      <div class="flex items-center justify-between px-3 py-2 border-b border-gray-100 gap-2">
+        <div class="min-w-0">
+          <span class="text-sm font-semibold text-gray-700">코드 — {group ? `${group.name} (${group.groupCode})` : isNewGroupSelected ? '새 그룹 (저장 후 입력)' : '-'}</span>
+          {#if group?.isSystem}
+            <p class="text-xs text-amber-600">시스템 코드 — 표시명·순서·설명만 고칠 수 있습니다.</p>
+          {:else if group?.description}
+            <p class="text-xs text-gray-400 truncate">{group.description}</p>
           {/if}
-        {/if}
+        </div>
+        <div class="flex gap-2 shrink-0">
+          <UiButton label="행 추가" color={BUTTON_COLORS.EMERALD} iconType="add" onclick={addCodeRow} />
+          <UiButton label="삭제" color={BUTTON_COLORS.ROSE} iconType="remove" onclick={removeCodes} />
+          <UiButton label="저장" color={BUTTON_COLORS.BLUE} iconType="save" onclick={saveCodes} />
+        </div>
       </div>
-    </div>
-  {/snippet}
-
-  <Modal bind:isOpen={isGroupOpen} title={editingGroup === null ? '코드 그룹 추가' : '코드 그룹 수정'} onSave={saveGroup}>
-    <div>
-      <label for="cg-code" class={labelClass}>그룹 코드</label>
-      <input id="cg-code" type="text" maxlength="30" bind:value={groupForm.groupCode} disabled={editingGroup !== null} placeholder="예: ACCOUNT_TYPE (영문 대문자·숫자·_)" class="{inputClass} disabled:bg-gray-100 disabled:text-gray-500" />
-      {#if editingGroup === null}
-        <p class="mt-1 text-xs text-gray-400">추가한 뒤에는 바꿀 수 없습니다. 화면에서 만드는 그룹은 일반 그룹(코드 추가·삭제 가능)입니다.</p>
-      {/if}
-    </div>
-    <div>
-      <label for="cg-name" class={labelClass}>그룹명</label>
-      <input id="cg-name" type="text" maxlength="50" bind:value={groupForm.name} class={inputClass} />
-    </div>
-    <div>
-      <label for="cg-desc" class={labelClass}>설명</label>
-      <input id="cg-desc" type="text" bind:value={groupForm.description} placeholder="예: 이 코드를 쓰는 화면·컬럼" class={inputClass} />
-    </div>
-    <div>
-      <label for="cg-sort" class={labelClass}>정렬순서</label>
-      <input id="cg-sort" type="text" bind:value={groupForm.sortOrder} placeholder={editingGroup === null ? '비우면 맨 뒤' : ''} class={inputClass} />
-    </div>
-  </Modal>
-
-  <Modal bind:isOpen={isAddOpen} title="코드 추가 — {group?.name ?? ''}" onSave={create}>
-    <div>
-      <label for="cc-code" class={labelClass}>코드</label>
-      <input id="cc-code" type="text" maxlength="30" bind:value={form.code} placeholder={groupCode === 'CURRENCY' ? '예: USD (영문 대문자 3자리)' : groupCode === 'MARKET' ? '예: KRX (영문 대문자·숫자)' : '예: KIWOOM'} class={inputClass} />
-      <p class="mt-1 text-xs text-gray-400">데이터에 저장되는 값입니다. 추가한 뒤에는 바꿀 수 없습니다.</p>
-    </div>
-    <div>
-      <label for="cc-name" class={labelClass}>표시명</label>
-      <input id="cc-name" type="text" maxlength="50" bind:value={form.name} class={inputClass} />
-    </div>
-    <div>
-      <label for="cc-desc" class={labelClass}>설명</label>
-      <input id="cc-desc" type="text" bind:value={form.description} class={inputClass} />
-    </div>
-  </Modal>
-</StandardListPage>
+      <div class="flex-1 min-h-0 relative"><div bind:this={codeEl} class="absolute inset-0"></div></div>
+    </section>
+  </div>
+</div>
