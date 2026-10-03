@@ -10,13 +10,14 @@
   import Modal from '$lib/components/common/Modal.svelte';
   import { BUTTON_COLORS } from '$lib/constants.js';
   import { accountApi } from '$lib/api/accountApi';
+  import { kstDateFormatter } from '$lib/utils/date';
 
   const columns = [
     { header: '계좌명', name: 'name', sortable: true },
     { header: '증권사', name: 'broker', sortable: true },
     { header: '계좌번호', name: 'accountNumber', minWidth: 160 },
     { header: '활성', name: 'isActive', align: 'center', width: 80, formatter: (/** @type {any} */ { value }) => (value ? 'Y' : 'N') },
-    { header: '생성일', name: 'createdAt', align: 'center', sortable: true, formatter: (/** @type {any} */ { value }) => (value ? String(value).slice(0, 10) : '') }
+    { header: '생성일', name: 'createdAt', align: 'center', sortable: true, formatter: kstDateFormatter }
   ];
 
   /** @type {any} */

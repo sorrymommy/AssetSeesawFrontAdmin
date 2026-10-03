@@ -10,13 +10,14 @@
   import { BUTTON_COLORS } from '$lib/constants.js';
   import { portfolioApi } from '$lib/api/portfolioApi';
   import { accountApi } from '$lib/api/accountApi';
+  import { kstDateFormatter } from '$lib/utils/date';
 
   const columns = [
     { header: '이름', name: 'name', sortable: true },
     { header: '설명', name: 'description', minWidth: 240 },
     { header: '연결 계좌수', name: 'accountCount', align: 'center', width: 110 },
     { header: '활성', name: 'isActive', align: 'center', width: 80, formatter: (/** @type {any} */ { value }) => (value ? 'Y' : 'N') },
-    { header: '생성일', name: 'createdAt', align: 'center', sortable: true, formatter: (/** @type {any} */ { value }) => (value ? String(value).slice(0, 10) : '') }
+    { header: '생성일', name: 'createdAt', align: 'center', sortable: true, formatter: kstDateFormatter }
   ];
 
   /** @type {any} */

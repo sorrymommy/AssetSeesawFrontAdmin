@@ -13,12 +13,12 @@
   import { BUTTON_COLORS } from '$lib/constants.js';
   import { authStore } from '$lib/stores/authStore';
   import { userApi, USER_ROLE_LABELS, USER_STATUS_LABELS } from '$lib/api/userApi';
+  import { kstDateFormatter } from '$lib/utils/date';
 
   /** @param {Record<string, string>} labels */
   const toListItems = (labels) => Object.entries(labels).map(([value, text]) => ({ text, value }));
   /** @param {Record<string, string>} labels */
   const toOptions = (labels) => Object.entries(labels).map(([value, label]) => ({ value, label }));
-  const dateFormatter = (/** @type {any} */ { value }) => (value ? String(value).slice(0, 10) : '');
 
   const columns = [
     { header: '이메일', name: 'email', minWidth: 220, sortable: true },
@@ -39,8 +39,8 @@
       formatter: 'listItemText',
       editor: { type: 'select', options: { instantApply: true, listItems: toListItems(USER_STATUS_LABELS) } }
     },
-    { header: '가입일', name: 'createdAt', align: 'center', width: 110, sortable: true, formatter: dateFormatter },
-    { header: '수정일', name: 'updatedAt', align: 'center', width: 110, formatter: dateFormatter }
+    { header: '가입일', name: 'createdAt', align: 'center', width: 110, sortable: true, formatter: kstDateFormatter },
+    { header: '수정일', name: 'updatedAt', align: 'center', width: 110, formatter: kstDateFormatter }
   ];
 
   /** @type {any} */

@@ -8,6 +8,7 @@
   import { authStore } from '$lib/stores/authStore';
   import { authApi } from '$lib/api/authApi';
   import { USER_ROLE_LABELS, USER_STATUS_LABELS } from '$lib/api/userApi';
+  import { toKstDate } from '$lib/utils/date';
 
   /** @type {any} 서버에서 받은 프로필 (못 받으면 로그인 시 저장한 정보로 표시) */
   let profile = $state(null);
@@ -20,12 +21,6 @@
   /** @param {unknown} error */
   function errorMessage(error) {
     return error instanceof Error ? error.message : String(error);
-  }
-
-  /** @param {any} v KST 기준 날짜 */
-  function formatDate(v) {
-    if (!v) return '-';
-    return new Date(v).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' });
   }
 
   onMount(async () => {
@@ -82,7 +77,7 @@
       </div>
       <div class="flex items-center justify-between px-6 py-4">
         <span class="text-sm text-gray-500">가입일</span>
-        <span class="text-sm font-medium text-gray-900">{formatDate(user.createdAt)}</span>
+        <span class="text-sm font-medium text-gray-900">{toKstDate(user.createdAt) || '-'}</span>
       </div>
     </div>
   </section>

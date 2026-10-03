@@ -12,6 +12,7 @@
   import LookupComboBox from '$lib/components/controls/LookupComboBox.svelte';
   import { BUTTON_COLORS } from '$lib/constants.js';
   import { portfolioApi } from '$lib/api/portfolioApi';
+  import { kstDateFormatter } from '$lib/utils/date';
 
   /** 비중은 소수 4자리까지 — 합계 비교는 정수(만분율)로 해서 부동소수 오차를 피한다 */
   const SCALE = 10000;
@@ -22,7 +23,7 @@
     { header: '적용일', name: 'effectiveDate', align: 'center', width: 110, sortable: true },
     { header: '구분별 목표비율', name: 'itemsSummary', minWidth: 360 },
     { header: '메모', name: 'memo', minWidth: 160 },
-    { header: '등록일', name: 'createdAt', align: 'center', width: 110, formatter: (/** @type {any} */ { value }) => (value ? String(value).slice(0, 10) : '') }
+    { header: '등록일', name: 'createdAt', align: 'center', width: 110, formatter: kstDateFormatter }
   ];
 
   /** @type {any} */
