@@ -7,6 +7,7 @@
   import TabBar from '$lib/components/TabBar.svelte';
   import { tabStore } from '$lib/stores/tabStore';
   import { authStore } from '$lib/stores/authStore';
+  import { loadCodes } from '$lib/stores/codeStore';
   import { APP_CONFIG } from '$lib/constants';
 
   // ── 대분류 1. 대시보드
@@ -130,6 +131,8 @@
       goto('/login');
       return;
     }
+    // 공통 코드(표시명·선택 목록)를 미리 불러둔다 — 각 화면도 필요 시 loadCodes()로 같은 결과를 기다린다
+    loadCodes().catch((error) => console.error('Failed to load common codes:', error));
     if ($tabStore.tabs.length === 0) {
       tabStore.openTab({ id: 'asset-dashboard', label: '자산 종합 대시보드', component: AssetDashboard });
     }
