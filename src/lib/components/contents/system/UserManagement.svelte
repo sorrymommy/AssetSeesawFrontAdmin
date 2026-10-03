@@ -1,12 +1,14 @@
 <script>
   /**
    * 사용자 관리 [구현][ADMIN]
-   * 목록·검색(이메일·이름, 역할, 상태) / 그리드에서 역할·상태를 고른 뒤 [Save]로 바뀐 행만 저장
+   * 목록·검색(이메일·이름, 역할, 상태) / [Add] 사용자 등록 팝업 / 그리드에서 역할·상태를 고른 뒤 [Save]로 바뀐 행만 저장
    * - 본인 행은 잠금 (관리자 권한 해제·비활성화로 스스로 잠기는 것 방지 — 서버도 거부)
    * - 역할 변경은 대상 사용자가 다시 로그인해야 반영. 활성이 아니면 로그인 불가
-   * API: userApi.list / update
+   * API: userApi.list / create / update
    */
+  import { tick } from 'svelte';
   import StandardListPage from '$lib/components/common/StandardListPage.svelte';
+  import Modal from '$lib/components/common/Modal.svelte';
   import LookupComboBox from '$lib/components/controls/LookupComboBox.svelte';
   import { BUTTON_COLORS } from '$lib/constants.js';
   import { authStore } from '$lib/stores/authStore';
@@ -44,6 +46,13 @@
   /** @type {any} */
   let grid;
   let filter = $state({ query: '', role: '', status: '' });
+
+  let isAddOpen = $state(false);
+  let form = $state(emptyForm());
+
+  function emptyForm() {
+    return { email: '', name: '', password: '', passwordConfirm: '', role: 'USER' };
+  }
   const myUserId = $derived($authStore?.user?.userId);
 
   /** @param {unknown} error */
@@ -115,11 +124,46 @@
     await loadUsers();
   }
 
+  function openAdd() {
+    form = emptyForm();
+    isAddOpen = true;
+  }
+
+  /** 검증 실패 시 Modal이 닫힌 뒤 다시 연다 @param {string} message */
+  async function reject(message) {
+    alert(message);
+    await tick();
+    isAddOpen = true;
+  }
+
+  async function create() {
+    const email = form.email.trim();
+    const name = form.name.trim();
+    if (!email || !name) return reject('이메일과 이름을 입력하세요.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return reject('이메일 형식이 올바르지 않습니다.');
+    if (form.password.length < 8) return reject('비밀번호는 8자 이상이어야 합니다.');
+    if (form.password !== form.passwordConfirm) return reject('비밀번호 확인이 일치하지 않습니다.');
+
+    try {
+      await userApi.create({ email, name, password: form.password, role: form.role });
+      form = emptyForm(); // 비밀번호를 화면 상태에 남기지 않는다
+      await loadUsers();
+    } catch (error) {
+      console.error('Failed to create user:', error);
+      alert(`등록에 실패했습니다.
+${errorMessage(error)}`);
+      isAddOpen = true; // 입력값을 유지한 채 팝업을 다시 연다
+    }
+  }
+
   const actions = [
     { label: 'Search', color: BUTTON_COLORS.INDIGO, iconType: 'search', onClick: handleSearch },
+    { label: 'Add', color: BUTTON_COLORS.EMERALD, iconType: 'add', onClick: openAdd },
     { label: 'Save', color: BUTTON_COLORS.BLUE, iconType: 'save', onClick: save }
   ];
 
+  const inputClass = 'block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border px-3 py-2';
+  const labelClass = 'block text-sm font-medium text-gray-700 mb-1';
   const filterInputClass = 'block w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs px-2 py-1.5 border';
 </script>
 
@@ -138,4 +182,34 @@
       <button type="submit" class="hidden" aria-hidden="true" tabindex="-1"></button>
     </form>
   {/snippet}
+
+  <Modal bind:isOpen={isAddOpen} title="사용자 등록" onSave={create}>
+    <div>
+      <label for="uf-email" class={labelClass}>이메일 (로그인 ID)</label>
+      <input id="uf-email" type="email" maxlength="255" autocomplete="off" bind:value={form.email} class={inputClass} />
+    </div>
+    <div>
+      <label for="uf-name" class={labelClass}>이름</label>
+      <input id="uf-name" type="text" maxlength="50" bind:value={form.name} class={inputClass} />
+    </div>
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label for="uf-pw" class={labelClass}>초기 비밀번호</label>
+        <input id="uf-pw" type="password" maxlength="100" autocomplete="new-password" bind:value={form.password} placeholder="8자 이상" class={inputClass} />
+      </div>
+      <div>
+        <label for="uf-pw2" class={labelClass}>비밀번호 확인</label>
+        <input id="uf-pw2" type="password" maxlength="100" autocomplete="new-password" bind:value={form.passwordConfirm} class={inputClass} />
+      </div>
+    </div>
+    <div>
+      <label for="uf-role" class={labelClass}>역할</label>
+      <select id="uf-role" bind:value={form.role} class={inputClass}>
+        {#each Object.entries(USER_ROLE_LABELS) as [value, label] (value)}
+          <option {value}>{label}</option>
+        {/each}
+      </select>
+    </div>
+    <p class="text-xs text-gray-400">등록한 사용자는 활성 상태로 만들어집니다. 초기 비밀번호는 사용자에게 따로 전달하세요.</p>
+  </Modal>
 </StandardListPage>

@@ -13,6 +13,8 @@ export const userApi = {
     ).toString();
     return apiClient.get(`/users${qs ? `?${qs}` : ''}`);
   },
+  /** POST /api/users (관리자가 등록, 상태 ACTIVE) @param {object} body {email, password, name, role} */
+  create: (body) => apiClient.post('/users', body),
   /** PUT /api/users/{id} @param {Id} id @param {object} body {role, status} */
   update: (id, body) => apiClient.put(`/users/${id}`, body)
 };
