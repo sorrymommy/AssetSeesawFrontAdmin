@@ -4,6 +4,7 @@
    * 목록 / 등록·수정 팝업 (등록·수정은 ADMIN 전용)
    * API: stockApi (GET 전체, POST/PUT ADMIN)
    * 종목 마스터는 삭제 개념이 없다 — 사용 중지는 수정 팝업의 '활성' 해제로 처리
+   * 시장·통화는 공통 코드(MARKET, CURRENCY)에서 선택, 목록에는 표시명
    */
   import { tick } from 'svelte';
   import StandardListPage from '$lib/components/common/StandardListPage.svelte';
@@ -11,14 +12,15 @@
   import { BUTTON_COLORS } from '$lib/constants.js';
   import { authStore } from '$lib/stores/authStore';
   import { stockApi } from '$lib/api/stockApi';
+  import { codes, loadCodes, codeName, codeOptions, CODE_GROUP } from '$lib/stores/codeStore';
 
   const isAdmin = $derived($authStore?.user?.role === 'ADMIN');
 
   const columns = [
     { header: '티커', name: 'ticker', sortable: true },
     { header: '종목명', name: 'name', sortable: true, minWidth: 180 },
-    { header: '시장', name: 'market', align: 'center', width: 100 },
-    { header: '통화', name: 'currency', align: 'center', width: 80 },
+    { header: '시장', name: 'market', align: 'center', width: 110, formatter: (/** @type {any} */ { value }) => codeName($codes, CODE_GROUP.MARKET, value) },
+    { header: '통화', name: 'currency', align: 'center', width: 90, formatter: (/** @type {any} */ { value }) => codeName($codes, CODE_GROUP.CURRENCY, value) },
     { header: '활성', name: 'isActive', align: 'center', width: 80, formatter: (/** @type {any} */ { value }) => (value ? 'Y' : 'N') }
   ];
 
@@ -28,7 +30,21 @@
   let isOpen = $state(false);
   /** @type {number|null} 수정 대상 id (null = 신규) */
   let editingId = $state(null);
-  let form = $state({ ticker: '', name: '', market: '', currency: 'KRW', isActive: true });
+  let form = $state(emptyForm());
+
+  /** 시장·통화 기본값 = 각 코드 중 정렬순서가 가장 앞선 사용 중 코드 */
+  function emptyForm() {
+    return {
+      ticker: '',
+      name: '',
+      market: codeOptions($codes, CODE_GROUP.MARKET)[0]?.value ?? '',
+      currency: codeOptions($codes, CODE_GROUP.CURRENCY)[0]?.value ?? '',
+      isActive: true
+    };
+  }
+  const marketOptions = $derived(codeOptions($codes, CODE_GROUP.MARKET, { keep: form.market }));
+  const currencyOptions = $derived(codeOptions($codes, CODE_GROUP.CURRENCY, { keep: form.currency }));
+  const marketFilterOptions = $derived(codeOptions($codes, CODE_GROUP.MARKET, { includeInactive: true }));
 
   /** @param {unknown} error */
   function errorMessage(error) {
@@ -36,14 +52,15 @@
   }
 
   /** @param {any} g */
-  function handleReady(g) {
+  async function handleReady(g) {
     grid = g;
+    await loadCodes().catch((error) => console.error('Failed to load codes:', error));
     loadStocks();
   }
 
   async function loadStocks() {
     try {
-      const list = await stockApi.list({ query: search.query.trim(), market: search.market.trim() });
+      const list = await stockApi.list({ query: search.query.trim(), market: search.market });
       grid?.resetData(list ?? []);
     } catch (error) {
       console.error('Failed to load stocks:', error);
@@ -53,13 +70,13 @@
 
   function openAdd() {
     editingId = null;
-    form = { ticker: '', name: '', market: '', currency: 'KRW', isActive: true };
+    form = emptyForm();
     isOpen = true;
   }
   /** @param {any} row */
   function openEdit(row) {
     editingId = row.stockId;
-    form = { ticker: row.ticker ?? '', name: row.name ?? '', market: row.market ?? '', currency: row.currency ?? 'KRW', isActive: row.isActive ?? true };
+    form = { ticker: row.ticker ?? '', name: row.name ?? '', market: row.market ?? '', currency: row.currency ?? '', isActive: row.isActive ?? true };
     isOpen = true;
   }
 
@@ -75,10 +92,9 @@
     try {
       if (editingId === null) {
         const ticker = form.ticker.trim();
-        const market = form.market.trim().toUpperCase();
-        const currency = form.currency.trim().toUpperCase();
+        const { market, currency } = form;
         if (!ticker || !name || !market) return reject('티커·종목명·시장을 입력하세요.');
-        if (currency.length !== 3) return reject('통화는 3자리 코드로 입력하세요. (예: KRW, USD)');
+        if (!currency) return reject('통화를 선택하세요.');
         await stockApi.create({ ticker, name, market, currency });
       } else {
         if (!name) return reject('종목명을 입력하세요.');
@@ -108,7 +124,10 @@
       </div>
       <div>
         <label for="st-m" class="block text-xs font-medium text-gray-700 mb-1">시장</label>
-        <input id="st-m" type="text" bind:value={search.market} placeholder="KRX / NASDAQ ..." class="block w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs px-2 py-1.5 border" />
+        <select id="st-m" bind:value={search.market} class="block w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs px-2 py-1.5 border">
+          <option value="">전체</option>
+          {#each marketFilterOptions as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
+        </select>
       </div>
       <button type="submit" class="hidden" aria-hidden="true" tabindex="-1"></button>
     </form>
@@ -122,7 +141,9 @@
       </div>
       <div>
         <label for="st-cur" class="block text-sm font-medium text-gray-700 mb-1">통화</label>
-        <input id="st-cur" type="text" maxlength="3" bind:value={form.currency} disabled={editingId !== null} class="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm border px-3 py-2 disabled:bg-gray-100 disabled:text-gray-500" />
+        <select id="st-cur" bind:value={form.currency} disabled={editingId !== null} class="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm border px-3 py-2 disabled:bg-gray-100 disabled:text-gray-500">
+          {#each currencyOptions as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
+        </select>
       </div>
     </div>
     <div>
@@ -131,7 +152,9 @@
     </div>
     <div>
       <label for="st-market" class="block text-sm font-medium text-gray-700 mb-1">시장</label>
-      <input id="st-market" type="text" maxlength="20" bind:value={form.market} disabled={editingId !== null} placeholder="KRX / NASDAQ ..." class="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm border px-3 py-2 disabled:bg-gray-100 disabled:text-gray-500" />
+      <select id="st-market" bind:value={form.market} disabled={editingId !== null} class="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm border px-3 py-2 disabled:bg-gray-100 disabled:text-gray-500">
+        {#each marketOptions as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
+      </select>
     </div>
     {#if editingId !== null}
       <label class="inline-flex items-center gap-2 cursor-pointer">

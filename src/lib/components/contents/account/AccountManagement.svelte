@@ -4,6 +4,7 @@
    * 목록 / 등록·수정 팝업
    * API: accountApi (/accounts CRUD)
    * 수정은 계좌명·활성만 가능 — 증권사·계좌번호는 등록 후 변경 불가
+   * 증권사는 공통 코드(BROKER)에서 선택, 목록에는 표시명
    */
   import { tick } from 'svelte';
   import StandardListPage from '$lib/components/common/StandardListPage.svelte';
@@ -11,10 +12,11 @@
   import { BUTTON_COLORS } from '$lib/constants.js';
   import { accountApi } from '$lib/api/accountApi';
   import { kstDateFormatter } from '$lib/utils/date';
+  import { codes, loadCodes, codeName, codeOptions, CODE_GROUP } from '$lib/stores/codeStore';
 
   const columns = [
     { header: '계좌명', name: 'name', sortable: true },
-    { header: '증권사', name: 'broker', sortable: true },
+    { header: '증권사', name: 'broker', sortable: true, formatter: (/** @type {any} */ { value }) => codeName($codes, CODE_GROUP.BROKER, value) },
     { header: '계좌번호', name: 'accountNumber', minWidth: 160 },
     { header: '활성', name: 'isActive', align: 'center', width: 80, formatter: (/** @type {any} */ { value }) => (value ? 'Y' : 'N') },
     { header: '생성일', name: 'createdAt', align: 'center', sortable: true, formatter: kstDateFormatter }
@@ -33,10 +35,14 @@
   }
 
   /** @param {any} g */
-  function handleReady(g) {
+  async function handleReady(g) {
     grid = g;
+    await loadCodes().catch((error) => console.error('Failed to load codes:', error));
     loadAccounts();
   }
+
+  // 등록 시에는 사용 중인 증권사만, 수정 화면은 기존 값이 사용중지여도 표시
+  const brokerOptions = $derived(codeOptions($codes, CODE_GROUP.BROKER, { keep: form.broker }));
 
   async function loadAccounts() {
     try {
@@ -71,7 +77,7 @@
     const name = form.name.trim();
     try {
       if (editingId === null) {
-        const broker = form.broker.trim();
+        const broker = form.broker;
         const accountNumber = form.accountNumber.trim();
         if (!name || !broker || !accountNumber) return reject('계좌명·증권사·계좌번호를 입력하세요.');
         await accountApi.create({ name, broker, accountNumber });
@@ -124,7 +130,13 @@
     </div>
     <div>
       <label for="ac-broker" class="block text-sm font-medium text-gray-700 mb-1">증권사</label>
-      <input id="ac-broker" type="text" maxlength="50" bind:value={form.broker} disabled={editingId !== null} class={inputClass} />
+      <select id="ac-broker" bind:value={form.broker} disabled={editingId !== null} class={inputClass}>
+        <option value="">선택하세요</option>
+        {#each brokerOptions as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
+      </select>
+      {#if editingId === null && brokerOptions.length === 0}
+        <p class="mt-1 text-xs text-rose-600">등록된 증권사 코드가 없습니다. 시스템 관리 → 공통 코드 관리에서 추가하세요.</p>
+      {/if}
     </div>
     <div>
       <label for="ac-no" class="block text-sm font-medium text-gray-700 mb-1">계좌번호</label>
