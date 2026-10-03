@@ -6,7 +6,7 @@ import { commonCodeApi } from '$lib/api/commonCodeApi';
  * 처음 필요할 때 한 번 불러와 공유하고, 공통 코드 관리에서 바꾸면 loadCodes(true)로 갱신한다.
  *
  * @typedef {{ code: string, name: string, description?: string|null, sortOrder: number, isActive: boolean }} Code
- * @typedef {{ groupCode: string, name: string, description?: string|null, isSystem: boolean, codes: Code[] }} CodeGroup
+ * @typedef {{ groupCode: string, name: string, description?: string|null, isSystem: boolean, sortOrder: number, codes: Code[] }} CodeGroup
  */
 
 /** 그룹 코드 상수 (값은 DB common_code_group.group_code) */
