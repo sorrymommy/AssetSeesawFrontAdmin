@@ -19,12 +19,13 @@
    */
 
   /**
-   * @type {{ user: User, gnbItems: MenuItem[], onLogout: () => void }}
+   * @type {{ user: User, gnbItems: MenuItem[], onLogout: () => void, onProfile?: () => void }}
    */
   let {
     user = { name: 'Guest', role: 'Viewer' },
     gnbItems = [],
-    onLogout = () => {}
+    onLogout = () => {},
+    onProfile = () => {}         // 내 정보 열기 (역할과 무관하게 모든 사용자)
   } = $props();
 
   let isProfileOpen = $state(false);
@@ -99,7 +100,12 @@
             <p class="text-sm font-semibold text-gray-900">{user.name}</p>
             <p class="text-xs text-gray-500">{user.role}</p>
           </div>
-          <a href="/profile" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Profile</a>
+          <button
+            onclick={() => { isProfileOpen = false; onProfile(); }}
+            class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            내 정보
+          </button>
           <a href="/settings" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Settings</a>
           <div class="border-t border-gray-50 my-1"></div>
           <button

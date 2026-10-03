@@ -137,7 +137,8 @@
 </script>
 
 <div class="min-h-screen bg-gray-50 flex flex-col">
-  <Header {user} {gnbItems} onLogout={handleLogout} />
+  <!-- 내 정보는 시스템 관리(ADMIN) 메뉴 밖에서도 열 수 있어야 한다 — USER도 비밀번호를 바꿀 수 있게 -->
+  <Header {user} {gnbItems} onLogout={handleLogout} onProfile={() => tabStore.openTab({ id: 'my-profile', label: '내 정보', component: MyProfile })} />
 
   <div class="flex flex-1 overflow-hidden">
     <NavMenu items={menuItems} />
