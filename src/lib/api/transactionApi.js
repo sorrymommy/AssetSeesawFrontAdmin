@@ -26,21 +26,8 @@ export const transactionApi = {
   restore: (id) => apiClient.post(`/transactions/${id}/restore`)
 };
 
-export const TX_TYPES = {
-  TRADE: ['BUY', 'SELL'],
-  CASH: ['DEPOSIT', 'WITHDRAW', 'DIVIDEND', 'INTEREST', 'FEE', 'EXCHANGE_IN', 'EXCHANGE_OUT', 'ADJUST']
-};
-
-/** @type {Record<string, string>} 화면 표시용 거래 유형명 */
-export const TX_TYPE_LABELS = {
-  BUY: '매수',
-  SELL: '매도',
-  DEPOSIT: '입금',
-  WITHDRAW: '출금',
-  DIVIDEND: '배당',
-  INTEREST: '이자',
-  FEE: '수수료',
-  EXCHANGE_IN: '환전입금',
-  EXCHANGE_OUT: '환전출금',
-  ADJUST: '조정'
-};
+/**
+ * 매매 거래 유형 — 종목·수량·단가를 쓰는 유형(그 외는 현금흐름: 통화·금액).
+ * 백엔드 검증·DB CHECK와 같은 로직 구분이라 상수로 둔다. 표시명·순서는 공통 코드(TX_TYPE).
+ */
+export const TRADE_TX_TYPES = ['BUY', 'SELL'];

@@ -3,6 +3,7 @@
    * 거래 내역 [구현]
    * 목록(계좌/유형/종목/기간 필터) / 등록·수정 팝업 (tx_type별 폼 분기) / 소프트삭제
    * API: transactionApi (/transactions), accountApi.list, stockApi.list
+   * 거래 유형·통화·증권사 표시명과 선택 목록은 공통 코드(codeStore)
    * 매매(BUY/SELL): 종목·수량·단가 필수, 통화는 종목 통화 / 현금흐름: 통화·금액 필수(배당은 종목 선택 가능)
    */
   import { tick } from 'svelte';
@@ -10,7 +11,8 @@
   import Modal from '$lib/components/common/Modal.svelte';
   import LookupComboBox from '$lib/components/controls/LookupComboBox.svelte';
   import { BUTTON_COLORS } from '$lib/constants.js';
-  import { transactionApi, TX_TYPES, TX_TYPE_LABELS } from '$lib/api/transactionApi';
+  import { transactionApi, TRADE_TX_TYPES } from '$lib/api/transactionApi';
+  import { codes, loadCodes, codeName, codeOptions, CODE_GROUP } from '$lib/stores/codeStore';
   import { accountApi } from '$lib/api/accountApi';
   import { stockApi } from '$lib/api/stockApi';
 
@@ -32,7 +34,10 @@
     { header: '비고', name: 'note', minWidth: 160 }
   ];
 
-  const txTypeOptions = [...TX_TYPES.TRADE, ...TX_TYPES.CASH].map((t) => ({ value: t, label: TX_TYPE_LABELS[t] ?? t }));
+  // 거래 유형은 시스템 코드 — 매매(BUY/SELL) 여부는 로직이라 TRADE_TX_TYPES로 구분하고, 표시명·순서는 공통 코드
+  const txTypeOptions = $derived(codeOptions($codes, CODE_GROUP.TX_TYPE, { includeInactive: true }));
+  const tradeTypeOptions = $derived(txTypeOptions.filter((o) => TRADE_TX_TYPES.includes(o.value)));
+  const cashTypeOptions = $derived(txTypeOptions.filter((o) => !TRADE_TX_TYPES.includes(o.value)));
 
   /** @type {any} */
   let grid;
@@ -52,7 +57,8 @@
   /** @type {number|null} 수정 대상 id (null = 신규) */
   let editingId = $state(null);
   let form = $state(emptyForm());
-  const isTrade = $derived(TX_TYPES.TRADE.includes(form.txType));
+  const isTrade = $derived(TRADE_TX_TYPES.includes(form.txType));
+  const currencyOptions = $derived(codeOptions($codes, CODE_GROUP.CURRENCY, { keep: form.currency }));
   const tradeAmount = $derived(isTrade && form.quantity !== '' && form.price !== '' ? Number(form.quantity) * Number(form.price) : null);
 
   /** @param {any} s */
@@ -79,7 +85,12 @@
   }
 
   function emptyForm() {
-    return { accountId: '', txType: 'BUY', txDate: today(), stock: '', quantity: '', price: '', currency: 'KRW', amount: '', fee: '0', tax: '0', note: '' };
+    return { accountId: '', txType: 'BUY', txDate: today(), stock: '', quantity: '', price: '', currency: defaultCurrency(), amount: '', fee: '0', tax: '0', note: '' };
+  }
+
+  /** 기본 통화 = 통화 코드 중 정렬순서가 가장 앞선 사용 중 코드 */
+  function defaultCurrency() {
+    return codeOptions($codes, CODE_GROUP.CURRENCY)[0]?.value ?? '';
   }
 
   /** @param {unknown} error */
@@ -91,7 +102,7 @@
   async function handleReady(g) {
     grid = g;
     try {
-      const [accountList, stockList] = await Promise.all([accountApi.list(), stockApi.list()]);
+      const [accountList, stockList] = await Promise.all([accountApi.list(), stockApi.list(), loadCodes()]);
       accounts = accountList ?? [];
       stocks = stockList ?? [];
     } catch (error) {
@@ -121,7 +132,7 @@
         list.map((/** @type {any} */ t) => ({
           ...t,
           accountName: accountName.get(t.accountId) ?? t.accountId,
-          txTypeLabel: TX_TYPE_LABELS[t.txType] ?? t.txType,
+          txTypeLabel: codeName($codes, CODE_GROUP.TX_TYPE, t.txType),
           stockName: t.stockId ? (stockById.get(t.stockId)?.name ?? t.stockId) : '',
           // 매매는 수량×단가, 현금흐름은 금액
           displayAmount: t.amount ?? (t.quantity != null && t.price != null ? Number(t.quantity) * Number(t.price) : null)
@@ -155,7 +166,7 @@
       stock: stock ? stockLabel(stock) : '',
       quantity: str(row.quantity),
       price: str(row.price),
-      currency: row.currency ?? 'KRW',
+      currency: row.currency ?? defaultCurrency(),
       amount: str(row.amount),
       fee: str(row.fee),
       tax: str(row.tax),
@@ -193,9 +204,9 @@
       if (isBlank(form.price) || !(price >= 0)) return reject('단가는 0 이상이어야 합니다.');
       Object.assign(body, { stockId: stock.stockId, quantity, price });
     } else {
-      const currency = form.currency.trim().toUpperCase();
+      const currency = form.currency;
       const amount = Number(form.amount);
-      if (currency.length !== 3) return reject('통화는 3자리 코드로 입력하세요. (예: KRW)');
+      if (!currency) return reject('통화를 선택하세요.');
       if (isBlank(form.amount) || !(amount > 0)) return reject('금액은 0보다 커야 합니다.');
       let stockId = null;
       if (form.stock.trim()) {
@@ -281,7 +292,7 @@
       <label for="f-account" class={labelClass}>계좌</label>
       <select id="f-account" bind:value={form.accountId} disabled={editingId !== null} class={inputClass}>
         {#each accounts as a (a.accountId)}
-          <option value={String(a.accountId)}>{a.name} ({a.broker} {a.accountNumber}){a.isActive ? '' : ' · 비활성'}</option>
+          <option value={String(a.accountId)}>{a.name} ({codeName($codes, CODE_GROUP.BROKER, a.broker)} {a.accountNumber}){a.isActive ? '' : ' · 비활성'}</option>
         {/each}
       </select>
     </div>
@@ -290,10 +301,10 @@
         <label for="f-type" class={labelClass}>거래 유형</label>
         <select id="f-type" bind:value={form.txType} class={inputClass}>
           <optgroup label="매매">
-            {#each TX_TYPES.TRADE as t (t)}<option value={t}>{TX_TYPE_LABELS[t]}</option>{/each}
+            {#each tradeTypeOptions as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
           </optgroup>
           <optgroup label="현금흐름">
-            {#each TX_TYPES.CASH as t (t)}<option value={t}>{TX_TYPE_LABELS[t]}</option>{/each}
+            {#each cashTypeOptions as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
           </optgroup>
         </select>
       </div>
@@ -325,7 +336,9 @@
       <div class="grid grid-cols-3 gap-4">
         <div>
           <label for="f-cur" class={labelClass}>통화</label>
-          <input id="f-cur" type="text" maxlength="3" bind:value={form.currency} class={inputClass} />
+          <select id="f-cur" bind:value={form.currency} class={inputClass}>
+            {#each currencyOptions as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
+          </select>
         </div>
         <div class="col-span-2">
           <label for="f-amt" class={labelClass}>금액</label>
