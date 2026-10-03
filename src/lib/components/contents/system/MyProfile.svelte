@@ -7,7 +7,7 @@
   import { onMount } from 'svelte';
   import { authStore } from '$lib/stores/authStore';
   import { authApi } from '$lib/api/authApi';
-  import { USER_ROLE_LABELS, USER_STATUS_LABELS } from '$lib/api/userApi';
+  import { codes, loadCodes, codeName, CODE_GROUP } from '$lib/stores/codeStore';
   import { toKstDate } from '$lib/utils/date';
 
   /** @type {any} 서버에서 받은 프로필 (못 받으면 로그인 시 저장한 정보로 표시) */
@@ -24,6 +24,7 @@
   }
 
   onMount(async () => {
+    loadCodes().catch((error) => console.error('Failed to load codes:', error));
     try {
       profile = await authApi.me();
     } catch (error) {
@@ -69,11 +70,11 @@
       </div>
       <div class="flex items-center justify-between px-6 py-4">
         <span class="text-sm text-gray-500">역할</span>
-        <span class="text-sm font-medium text-gray-900">{USER_ROLE_LABELS[user.role] ?? user.role ?? '-'}</span>
+        <span class="text-sm font-medium text-gray-900">{codeName($codes, CODE_GROUP.USER_ROLE, user.role) || '-'}</span>
       </div>
       <div class="flex items-center justify-between px-6 py-4">
         <span class="text-sm text-gray-500">상태</span>
-        <span class="text-sm font-medium text-gray-900">{USER_STATUS_LABELS[user.status] ?? user.status ?? '-'}</span>
+        <span class="text-sm font-medium text-gray-900">{codeName($codes, CODE_GROUP.USER_STATUS, user.status) || '-'}</span>
       </div>
       <div class="flex items-center justify-between px-6 py-4">
         <span class="text-sm text-gray-500">가입일</span>

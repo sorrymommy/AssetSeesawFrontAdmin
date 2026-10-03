@@ -12,15 +12,16 @@
   import LookupComboBox from '$lib/components/controls/LookupComboBox.svelte';
   import { BUTTON_COLORS } from '$lib/constants.js';
   import { authStore } from '$lib/stores/authStore';
-  import { userApi, USER_ROLE_LABELS, USER_STATUS_LABELS } from '$lib/api/userApi';
+  import { userApi } from '$lib/api/userApi';
+  import { codes, loadCodes, codeName, codeOptions, CODE_GROUP } from '$lib/stores/codeStore';
   import { kstDateFormatter } from '$lib/utils/date';
 
-  /** @param {Record<string, string>} labels */
-  const toListItems = (labels) => Object.entries(labels).map(([value, text]) => ({ text, value }));
-  /** @param {Record<string, string>} labels */
-  const toOptions = (labels) => Object.entries(labels).map(([value, label]) => ({ value, label }));
+  /** 역할·상태 select 목록은 공통 코드라 코드를 불러온 뒤 컬럼을 다시 만든다 @param {string} group */
+  const listItems = (group) => codeOptions($codes, group, { includeInactive: true }).map((o) => ({ text: o.label, value: o.value }));
+  const roleOptions = $derived(codeOptions($codes, CODE_GROUP.USER_ROLE, { includeInactive: true }));
+  const statusOptions = $derived(codeOptions($codes, CODE_GROUP.USER_STATUS, { includeInactive: true }));
 
-  const columns = [
+  const buildColumns = () => [
     { header: '이메일', name: 'email', minWidth: 220, sortable: true },
     { header: '이름', name: 'displayName', minWidth: 140, sortable: true },
     {
@@ -29,7 +30,7 @@
       align: 'center',
       width: 170,
       formatter: 'listItemText',
-      editor: { type: 'select', options: { instantApply: true, listItems: toListItems(USER_ROLE_LABELS) } }
+      editor: { type: 'select', options: { instantApply: true, listItems: listItems(CODE_GROUP.USER_ROLE) } }
     },
     {
       header: '상태 (더블클릭하여 선택)',
@@ -37,7 +38,7 @@
       align: 'center',
       width: 170,
       formatter: 'listItemText',
-      editor: { type: 'select', options: { instantApply: true, listItems: toListItems(USER_STATUS_LABELS) } }
+      editor: { type: 'select', options: { instantApply: true, listItems: listItems(CODE_GROUP.USER_STATUS) } }
     },
     { header: '가입일', name: 'createdAt', align: 'center', width: 110, sortable: true, formatter: kstDateFormatter },
     { header: '수정일', name: 'updatedAt', align: 'center', width: 110, formatter: kstDateFormatter }
@@ -67,8 +68,14 @@
   }
 
   /** @param {any} g */
-  function handleReady(g) {
+  async function handleReady(g) {
     grid = g;
+    try {
+      await loadCodes();
+      grid.setColumns(buildColumns());
+    } catch (error) {
+      console.error('Failed to load codes:', error);
+    }
     loadUsers();
   }
 
@@ -107,7 +114,11 @@
       return;
     }
     const lines = rows.map(
-      (r) => `${r.email}: ${USER_ROLE_LABELS[r.originalRole]}/${USER_STATUS_LABELS[r.originalStatus]} → ${USER_ROLE_LABELS[r.role]}/${USER_STATUS_LABELS[r.status]}`
+      (r) => {
+        const label = (/** @type {string} */ role, /** @type {string} */ status) =>
+          `${codeName($codes, CODE_GROUP.USER_ROLE, role)}/${codeName($codes, CODE_GROUP.USER_STATUS, status)}`;
+        return `${r.email}: ${label(r.originalRole, r.originalStatus)} → ${label(r.role, r.status)}`;
+      }
     );
     if (!confirm(`다음 ${rows.length}명의 역할·상태를 변경할까요?\n${lines.join('\n')}`)) return;
 
@@ -167,15 +178,15 @@ ${errorMessage(error)}`);
   const filterInputClass = 'block w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs px-2 py-1.5 border';
 </script>
 
-<StandardListPage title="사용자 관리" {columns} {actions} onReady={handleReady}>
+<StandardListPage title="사용자 관리" columns={buildColumns()} {actions} onReady={handleReady}>
   {#snippet filters()}
     <form class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-4 items-end" onsubmit={(e) => { e.preventDefault(); handleSearch(); }}>
       <div class="sm:col-span-2">
         <label for="us-query" class="block text-xs font-medium text-gray-700 mb-1">이메일·이름</label>
         <input id="us-query" type="text" bind:value={filter.query} placeholder="검색어" class={filterInputClass} />
       </div>
-      <LookupComboBox id="us-role" label="역할" options={toOptions(USER_ROLE_LABELS)} bind:value={filter.role} placeholder="전체" />
-      <LookupComboBox id="us-status" label="상태" options={toOptions(USER_STATUS_LABELS)} bind:value={filter.status} placeholder="전체" />
+      <LookupComboBox id="us-role" label="역할" options={roleOptions} bind:value={filter.role} placeholder="전체" />
+      <LookupComboBox id="us-status" label="상태" options={statusOptions} bind:value={filter.status} placeholder="전체" />
       <div class="sm:col-span-3 lg:col-span-2 text-xs text-gray-400">
         역할·상태 셀을 더블클릭해 고른 뒤 [Save]. 본인 계정은 변경할 수 없습니다. 역할 변경은 다음 로그인부터 적용됩니다.
       </div>
@@ -205,8 +216,8 @@ ${errorMessage(error)}`);
     <div>
       <label for="uf-role" class={labelClass}>역할</label>
       <select id="uf-role" bind:value={form.role} class={inputClass}>
-        {#each Object.entries(USER_ROLE_LABELS) as [value, label] (value)}
-          <option {value}>{label}</option>
+        {#each roleOptions as o (o.value)}
+          <option value={o.value}>{o.label}</option>
         {/each}
       </select>
     </div>
