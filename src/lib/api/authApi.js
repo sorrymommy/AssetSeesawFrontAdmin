@@ -10,5 +10,7 @@ export const authApi = {
   /** POST /api/auth/login @param {object} body {email, password} */
   login: (body) => apiClient.post('/auth/login', body),
   // GET /api/auth/me
-  me: () => apiClient.get('/auth/me')
+  me: () => apiClient.get('/auth/me'),
+  /** POST /api/auth/change-password (본인) @param {object} body {currentPassword, newPassword} */
+  changePassword: (body) => apiClient.post('/auth/change-password', body)
 };
