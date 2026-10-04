@@ -21,6 +21,15 @@ export const setApiLoader = (loader) => {
   globalLoader = loader;
 };
 
+// 토큰을 보냈는데 401이 오면(만료·무효 토큰) 호출 — 로그아웃 처리는 +layout.svelte에서 주입
+/** @type {(() => void) | null} */
+let unauthorizedHandler = null;
+
+/** @param {() => void} handler */
+export const setUnauthorizedHandler = (handler) => {
+  unauthorizedHandler = handler;
+};
+
 // AssetSeesaw WebAPI (ASP.NET Core) — dev default. Override via .env (VITE_API_BASE_URL)
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://localhost:7139/api';
 
@@ -62,6 +71,10 @@ async function request(endpoint, options = {}) {
 
   try {
     const response = await fetch(url, config);
+
+    if (response.status === 401 && token) {
+      unauthorizedHandler?.();
+    }
 
     if (!response.ok) {
       const errorBody = await response.json().catch(() => ({}));
