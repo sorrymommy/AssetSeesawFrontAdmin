@@ -5,7 +5,7 @@ AssetSeesaw(주식 리밸런싱 시스템) 관리자용 프론트엔드.
 
 ## 기술 스택
 
-- SvelteKit (Svelte 5, runes)
+- SvelteKit (Svelte 5, runes) — `adapter-static` SPA 빌드 (`ssr = false`)
 - Tailwind CSS 4 (+forms, +typography)
 - TOAST UI Grid (tui-grid)
 - JavaScript + JSDoc 타입 체크 (svelte-check)
@@ -84,5 +84,30 @@ npm install
 npm run dev        # 개발 서버
 npm run check      # svelte-check
 npm run lint       # eslint
-npm run build      # 프로덕션 빌드
+npm run build      # 프로덕션 빌드 (build/)
+```
+
+## 배포 (Docker 이미지 → GHCR)
+
+정적 빌드 결과를 nginx 이미지로 서빙한다. API는 같은 출처의 `/api`로 호출하고
+nginx가 `API_UPSTREAM`(기본 `http://webapi:8080`)으로 프록시한다 — 이미지 하나로 환경 무관, CORS 불필요.
+
+`VERSION` 파일(`yyyy.MM.dd.N`, 예: `2026.10.04.1`)이 바뀐 커밋이 `main`에 push되면
+GitHub Actions(`.github/workflows/docker-publish.yml`)가 이미지를 빌드해 올리고 git 태그 `v버전`을 만든다.
+
+- 이미지: `ghcr.io/sorrymommy/assetseesaw-front-admin:<버전>` / `:latest`
+- 형식이 틀리거나 이미 배포된 버전(같은 git 태그 존재)이면 실패
+- `package.json`의 `version`은 SemVer 전용이라 VERSION과 맞추지 않는다
+
+버전 올리기 — 오늘 날짜면 순서 +1, 아니면 `오늘.1`로 바꾸고 VERSION만 커밋:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/bump-version.ps1        # 커밋만
+powershell -ExecutionPolicy Bypass -File scripts/bump-version.ps1 -Push  # 커밋 + push
+```
+
+컨테이너 실행:
+
+```bash
+docker run -d -p 80:80 -e API_UPSTREAM=http://webapi:8080 ghcr.io/sorrymommy/assetseesaw-front-admin:latest
 ```
