@@ -43,11 +43,13 @@ export const portfolioApi = {
   /** DELETE /api/portfolios/{id}/asset-mappings/{stockId} (연결 해제 → 미분류) @param {Id} id @param {Id} stockId */
   removeAssetMapping: (id, stockId) => apiClient.delete(`/portfolios/${id}/asset-mappings/${stockId}`),
 
-  // ----- 목표비율 버전 (portfolio_target_version/item) — 구분별 비율, 합 100 -----
+  // ----- 목표비율 버전 (portfolio_target_version/item/stock_item) — 구분별 비율 합 100, 구분 안 종목 세부비율은 선택(넣은 구분은 합 100) -----
   /** GET /api/portfolios/{id}/targets @param {Id} id */
   targets: (id) => apiClient.get(`/portfolios/${id}/targets`),
-  /** POST /api/portfolios/{id}/targets @param {Id} id @param {object} body {effectiveDate, memo, items[{categoryId, targetWeight}]} */
+  /** POST /api/portfolios/{id}/targets @param {Id} id @param {object} body {effectiveDate, memo, items[{categoryId, targetWeight}], stockItems?[{categoryId, stockId, targetWeight}]} */
   createTarget: (id, body) => apiClient.post(`/portfolios/${id}/targets`, body),
+  /** PUT /api/portfolios/{id}/targets/{versionId} (기존 버전 덮어쓰기, 적용일 고정) @param {Id} id @param {Id} versionId @param {object} body {memo, items[], stockItems?[]} */
+  updateTarget: (id, versionId, body) => apiClient.put(`/portfolios/${id}/targets/${versionId}`, body),
   /** DELETE /api/portfolios/{id}/targets/{versionId} @param {Id} id @param {Id} versionId */
   removeTarget: (id, versionId) => apiClient.delete(`/portfolios/${id}/targets/${versionId}`),
   /** POST .../targets/{versionId}/restore @param {Id} id @param {Id} versionId */
