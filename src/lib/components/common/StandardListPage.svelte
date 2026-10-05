@@ -32,6 +32,8 @@
   let gridContainer;
   /** @type {any} */
   let grid;
+  /** @type {ResizeObserver | undefined} */
+  let resizeObserver;
 
   onMount(async () => {
     const { default: Grid } = await import('tui-grid');
@@ -49,7 +51,10 @@
     });
 
     setTimeout(() => grid.refreshLayout(), 100);
-    window.addEventListener('resize', handleResize);
+    // 숨김 탭(display:none)에서 데이터를 받으면 너비 0으로 그려진다 — 다시 보일 때(크기 변화) 레이아웃을 다시 계산
+    // 창 크기 변경도 컨테이너 크기 변화로 함께 잡힌다
+    resizeObserver = new ResizeObserver(handleResize);
+    resizeObserver.observe(gridContainer);
 
     grid.on('dblclick', (ev) => {
       if (ev.rowKey !== undefined) {
@@ -61,12 +66,13 @@
   });
 
   onDestroy(() => {
+    resizeObserver?.disconnect();
     if (grid) grid.destroy();
-    window.removeEventListener('resize', handleResize);
   });
 
   function handleResize() {
-    if (grid) grid.refreshLayout();
+    // 숨김 상태(크기 0)에서는 계산하지 않는다
+    if (grid && gridContainer.offsetWidth > 0) grid.refreshLayout();
   }
 </script>
 

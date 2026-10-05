@@ -57,6 +57,8 @@
   let groupGrid;
   /** @type {any} */
   let codeGrid;
+  /** @type {ResizeObserver | undefined} */
+  let resizeObserver;
 
   /** 디테일에 표시 중인 그룹 코드 (새 그룹 행이면 null) */
   let selectedGroup = $state(/** @type {string|null} */ (null));
@@ -92,7 +94,10 @@
       showGroup(groupGrid.getRow(ev.rowKey));
     });
 
-    window.addEventListener('resize', refreshLayout);
+    // 숨김 탭에서 그려진 그리드를 다시 보일 때 바로잡는다 (창 크기 변경도 함께 잡힘)
+    resizeObserver = new ResizeObserver(refreshLayout);
+    resizeObserver.observe(groupEl);
+    resizeObserver.observe(codeEl);
     try {
       await loadCodes(true);
       renderGroups();
@@ -104,10 +109,12 @@
   onDestroy(() => {
     groupGrid?.destroy();
     codeGrid?.destroy();
-    window.removeEventListener('resize', refreshLayout);
+    resizeObserver?.disconnect();
   });
 
   function refreshLayout() {
+    // 숨김 상태(크기 0)에서는 계산하지 않는다
+    if (!groupEl?.offsetWidth) return;
     groupGrid?.refreshLayout();
     codeGrid?.refreshLayout();
   }
