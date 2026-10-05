@@ -16,5 +16,7 @@ export const userApi = {
   /** POST /api/users (관리자가 등록, 상태 ACTIVE) @param {object} body {email, password, name, role} */
   create: (body) => apiClient.post('/users', body),
   /** PUT /api/users/{id} @param {Id} id @param {object} body {role, status} */
-  update: (id, body) => apiClient.put(`/users/${id}`, body)
+  update: (id, body) => apiClient.put(`/users/${id}`, body),
+  /** POST /api/users/{id}/reset-password → {userId, email, temporaryPassword} (임시 비밀번호는 이 응답에서만) @param {Id} id */
+  resetPassword: (id) => apiClient.post(`/users/${id}/reset-password`, {})
 };

@@ -4,7 +4,8 @@
    * 목록·검색(이메일·이름, 역할, 상태) / [Add] 사용자 등록 팝업 / 그리드에서 역할·상태를 고른 뒤 [Save]로 바뀐 행만 저장
    * - 본인 행은 잠금 (관리자 권한 해제·비활성화로 스스로 잠기는 것 방지 — 서버도 거부)
    * - 역할 변경은 대상 사용자가 다시 로그인해야 반영. 활성이 아니면 로그인 불가
-   * API: userApi.list / create / update
+   * - [비밀번호 초기화] 체크한 사용자에게 임시 비밀번호 발급(한 번만 표시) → 다음 로그인 시 변경 강제. 본인은 제외
+   * API: userApi.list / create / update / resetPassword
    */
   import { tick } from 'svelte';
   import StandardListPage from '$lib/components/common/StandardListPage.svelte';
@@ -40,6 +41,7 @@
       formatter: 'listItemText',
       editor: { type: 'select', options: { instantApply: true, listItems: listItems(CODE_GROUP.USER_STATUS) } }
     },
+    { header: '비밀번호', name: 'mustChangePassword', align: 'center', width: 100, formatter: (/** @type {any} */ { value }) => (value ? '변경 필요' : '') },
     { header: '가입일', name: 'createdAt', align: 'center', width: 110, sortable: true, formatter: kstDateFormatter },
     { header: '수정일', name: 'updatedAt', align: 'center', width: 110, formatter: kstDateFormatter }
   ];
@@ -167,10 +169,61 @@ ${errorMessage(error)}`);
     }
   }
 
+  // ==================== 비밀번호 초기화 ====================
+
+  let isResetResultOpen = $state(false);
+  /** @type {Array<{email:string, temporaryPassword:string}>} 발급한 임시 비밀번호 (팝업을 닫으면 지운다) */
+  let resetResults = $state([]);
+  let copiedEmail = $state('');
+
+  async function resetPasswords() {
+    grid?.finishEditing();
+    const rows = /** @type {any[]} */ (grid?.getCheckedRows() ?? []);
+    if (rows.length === 0) return alert('비밀번호를 초기화할 사용자를 체크하세요.');
+    if (rows.some((r) => r.userId === myUserId)) return alert('본인 계정은 초기화할 수 없습니다. 내 정보에서 비밀번호를 변경하세요.');
+    if (!confirm(`다음 ${rows.length}명의 비밀번호를 임시 비밀번호로 초기화할까요?\n${rows.map((r) => r.email).join('\n')}\n\n기존 비밀번호로는 더 이상 로그인할 수 없고, 다음 로그인 때 새 비밀번호를 정해야 합니다.`)) return;
+
+    /** @type {Array<{email:string, temporaryPassword:string}>} */
+    const results = [];
+    /** @type {string[]} */
+    const failures = [];
+    for (const row of rows) {
+      try {
+        const res = await userApi.resetPassword(row.userId);
+        results.push({ email: res.email, temporaryPassword: res.temporaryPassword });
+      } catch (error) {
+        failures.push(`${row.email}: ${errorMessage(error)}`);
+      }
+    }
+    if (failures.length > 0) alert(`일부 사용자를 초기화하지 못했습니다.\n${failures.join('\n')}`);
+    if (results.length > 0) {
+      resetResults = results;
+      copiedEmail = '';
+      isResetResultOpen = true;
+    }
+    await loadUsers();
+  }
+
+  /** @param {{email:string, temporaryPassword:string}} r */
+  async function copyPassword(r) {
+    try {
+      await navigator.clipboard.writeText(r.temporaryPassword);
+      copiedEmail = r.email;
+    } catch {
+      alert('클립보드에 복사하지 못했습니다. 직접 선택해 복사하세요.');
+    }
+  }
+
+  // 팝업을 닫으면 임시 비밀번호를 화면 상태에서 지운다
+  $effect(() => {
+    if (!isResetResultOpen) resetResults = [];
+  });
+
   const actions = [
     { label: 'Search', color: BUTTON_COLORS.INDIGO, iconType: 'search', onClick: handleSearch },
     { label: 'Add', color: BUTTON_COLORS.EMERALD, iconType: 'add', onClick: openAdd },
-    { label: 'Save', color: BUTTON_COLORS.BLUE, iconType: 'save', onClick: save }
+    { label: 'Save', color: BUTTON_COLORS.BLUE, iconType: 'save', onClick: save },
+    { label: '비밀번호 초기화', color: BUTTON_COLORS.AMBER, onClick: resetPasswords }
   ];
 
   const inputClass = 'block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border px-3 py-2';
@@ -189,6 +242,7 @@ ${errorMessage(error)}`);
       <LookupComboBox id="us-status" label="상태" options={statusOptions} bind:value={filter.status} placeholder="전체" />
       <div class="sm:col-span-3 lg:col-span-2 text-xs text-gray-400">
         역할·상태 셀을 더블클릭해 고른 뒤 [Save]. 본인 계정은 변경할 수 없습니다. 역할 변경은 다음 로그인부터 적용됩니다.
+        로그인이 안 되는 사용자는 체크 후 [비밀번호 초기화].
       </div>
       <button type="submit" class="hidden" aria-hidden="true" tabindex="-1"></button>
     </form>
@@ -222,5 +276,27 @@ ${errorMessage(error)}`);
       </select>
     </div>
     <p class="text-xs text-gray-400">등록한 사용자는 활성 상태로 만들어집니다. 초기 비밀번호는 사용자에게 따로 전달하세요.</p>
+  </Modal>
+
+  <Modal bind:isOpen={isResetResultOpen} title="임시 비밀번호 발급" width="max-w-lg">
+    <p class="text-sm text-amber-600">임시 비밀번호는 지금 한 번만 표시됩니다. 사용자에게 전달하세요. 사용자는 이 비밀번호로 로그인한 뒤 바로 새 비밀번호를 정해야 합니다.</p>
+    <table class="w-full text-sm border border-gray-200 rounded-md">
+      <thead class="bg-gray-50 text-gray-600">
+        <tr><th class="text-left p-2">이메일</th><th class="text-left p-2">임시 비밀번호</th><th class="w-20"></th></tr>
+      </thead>
+      <tbody>
+        {#each resetResults as r (r.email)}
+          <tr class="border-t border-gray-100">
+            <td class="p-2">{r.email}</td>
+            <td class="p-2 font-mono select-all">{r.temporaryPassword}</td>
+            <td class="p-2 text-right">
+              <button type="button" onclick={() => copyPassword(r)} class="text-xs font-medium text-indigo-600 hover:text-indigo-800">
+                {copiedEmail === r.email ? '복사됨' : '복사'}
+              </button>
+            </td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
   </Modal>
 </StandardListPage>

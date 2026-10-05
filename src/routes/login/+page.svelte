@@ -11,6 +11,13 @@
   let isLoading = $state(false);
   let errorMessage = $state('');
 
+  // 관리자가 초기화한 임시 비밀번호로 로그인하면 새 비밀번호를 정하는 단계로 넘어간다
+  let mustChange = $state(false);
+  /** 임시 비밀번호 로그인 토큰 — 비밀번호 변경에만 쓰고 로그인 상태로 저장하지 않는다 */
+  let tempToken = '';
+  let newPassword = $state('');
+  let newPasswordConfirm = $state('');
+
   // 개발 서버(vite dev)에서만: .env의 테스트 계정으로 자동 로그인. 운영 빌드에서는 DEV=false라 동작하지 않는다.
   const devAutoLogin =
     import.meta.env.DEV &&
@@ -38,6 +45,13 @@
     try {
       // WebAPI: POST /api/auth/login → { userId, email, name, role, token, expiresAt }
       const res = await authApi.login({ email, password });
+      if (res.mustChangePassword) {
+        tempToken = res.token;
+        newPassword = '';
+        newPasswordConfirm = '';
+        mustChange = true;
+        return;
+      }
 
       authStore.set({
         isAuthenticated: true,
@@ -55,6 +69,40 @@
     } finally {
       isLoading = false;
     }
+  }
+
+  /** @param {Event} e */
+  async function handleChangePassword(e) {
+    e.preventDefault();
+    errorMessage = '';
+    if (newPassword.length < 8) return (errorMessage = '새 비밀번호는 8자 이상이어야 합니다.');
+    if (newPassword !== newPasswordConfirm) return (errorMessage = '새 비밀번호 확인이 일치하지 않습니다.');
+    if (newPassword === password) return (errorMessage = '임시 비밀번호와 다른 비밀번호를 입력하세요.');
+
+    isLoading = true;
+    try {
+      await authApi.changePassword({ currentPassword: password, newPassword }, tempToken);
+    } catch (/** @type {any} */ err) {
+      errorMessage = err?.message || '비밀번호를 변경하지 못했습니다.';
+      isLoading = false;
+      return;
+    }
+    // 새 비밀번호로 다시 로그인 (임시 비밀번호 토큰은 계속 제한되므로 새 토큰을 받는다)
+    tempToken = '';
+    password = newPassword;
+    newPassword = '';
+    newPasswordConfirm = '';
+    mustChange = false;
+    await login();
+  }
+
+  function cancelChange() {
+    tempToken = '';
+    password = '';
+    newPassword = '';
+    newPasswordConfirm = '';
+    errorMessage = '';
+    mustChange = false;
   }
 </script>
 
@@ -96,6 +144,51 @@
         </div>
       {/if}
 
+      {#if mustChange}
+      <form class="mt-10 space-y-6" onsubmit={handleChangePassword}>
+        <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          관리자가 비밀번호를 초기화했습니다. 계속하려면 새 비밀번호를 정하세요. ({email})
+        </div>
+        <div class="space-y-5">
+          <div>
+            <label for="new-password" class="block text-sm font-medium text-gray-700">새 비밀번호</label>
+            <input
+              id="new-password"
+              type="password"
+              autocomplete="new-password"
+              required
+              maxlength="100"
+              bind:value={newPassword}
+              class="mt-1 block w-full px-4 py-3 rounded-xl border border-gray-200 placeholder-gray-400 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-all bg-gray-50 focus:bg-white"
+              placeholder="8자 이상"
+            />
+          </div>
+          <div>
+            <label for="new-password-confirm" class="block text-sm font-medium text-gray-700">새 비밀번호 확인</label>
+            <input
+              id="new-password-confirm"
+              type="password"
+              autocomplete="new-password"
+              required
+              maxlength="100"
+              bind:value={newPasswordConfirm}
+              class="mt-1 block w-full px-4 py-3 rounded-xl border border-gray-200 placeholder-gray-400 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-all bg-gray-50 focus:bg-white"
+            />
+          </div>
+        </div>
+        <div class="space-y-3">
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={isLoading}
+            class="w-full justify-center py-3.5 text-base shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/40"
+          >
+            {isLoading ? 'Saving...' : '비밀번호 변경 후 로그인'}
+          </Button>
+          <button type="button" onclick={cancelChange} class="w-full text-sm text-gray-500 hover:text-gray-700">다른 계정으로 로그인</button>
+        </div>
+      </form>
+      {:else}
       <form class="mt-10 space-y-6" onsubmit={handleLogin}>
         <div class="space-y-5">
           <div>
@@ -162,7 +255,7 @@
           </Button>
         </div>
       </form>
-
+      {/if}
 
     </div>
   </div>
