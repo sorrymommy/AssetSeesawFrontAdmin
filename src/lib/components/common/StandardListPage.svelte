@@ -3,7 +3,7 @@
    * 단위 프로그램 표준 골격 (목록 기본형)
    * - 상단: 검색 필터 영역 (filters 스니펫)
    * - 중단: 액션 버튼바 (actions 배열)
-   * - 하단: tui-grid 목록
+   * - 하단: tui-grid 목록 (+ 목록 아래 합계 등 footer 스니펫)
    * - 등록/수정 모달 등 부가 UI는 children 스니펫으로 주입
    *
    * 사용 규약(프로젝트 표준): 목록이 기본, 등록/수정은 팝업(Modal),
@@ -21,6 +21,7 @@
     /** @type {Array<{label:string,color?:string,iconType?:string,onClick?:() => void}>} */
     actions = [],
     filters = undefined,        // 검색 필터 영역 스니펫
+    footer = undefined,         // 목록 아래 영역 스니펫 (합계 등)
     children = undefined,       // 모달 등 부가 UI 스니펫
     onReady = () => {},          // (grid) => void
     onRowDblClick = () => {}     // (rowData, grid) => void
@@ -91,6 +92,12 @@
   <div class="flex-1 bg-white rounded-lg shadow overflow-hidden relative">
     <div bind:this={gridContainer} class="h-full"></div>
   </div>
+
+  {#if footer}
+    <div class="bg-white p-3 rounded-lg shadow-sm border border-gray-200 mt-3">
+      {@render footer()}
+    </div>
+  {/if}
 </div>
 
 {@render children?.()}
