@@ -23,6 +23,7 @@
   import RebalancingRunList from '$lib/components/contents/rebalancing/RebalancingRunList.svelte';
   // ── 대분류 4. 거래·계좌
   import AccountManagement from '$lib/components/contents/account/AccountManagement.svelte';
+  import AccountBalance from '$lib/components/contents/account/AccountBalance.svelte';
   import TransactionList from '$lib/components/contents/transaction/TransactionList.svelte';
   // ── 대분류 5. 기준정보
   import StockManagement from '$lib/components/contents/stock/StockManagement.svelte';
@@ -102,7 +103,10 @@
       { label: '리밸런싱 관리', icon: ICON.scale, children: [menuTab('rebalancing-runs', '리밸런싱 실행 이력', RebalancingRunList)] }
     ],
     trade: [
-      { label: '계좌 관리', icon: ICON.bank, children: [menuTab('accounts', '계좌 관리', AccountManagement)] },
+      { label: '계좌 관리', icon: ICON.bank, children: [
+        menuTab('accounts', '계좌 관리', AccountManagement),
+        menuTab('account-balance', '계좌잔고', AccountBalance)
+      ] },
       { label: '거래 관리', icon: ICON.receipt, children: [menuTab('transactions', '거래 내역', TransactionList)] }
     ],
     master: [

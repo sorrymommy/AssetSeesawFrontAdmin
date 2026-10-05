@@ -19,6 +19,9 @@ export const accountApi = {
   /** POST /api/accounts/{id}/restore @param {Id} id */
   restore: (id) => apiClient.post(`/accounts/${id}/restore`),
 
+  /** GET /api/accounts/{id}/balance — 계좌잔고 (종목별 매입·평가 + 현금잔고 + 총평가액) @param {Id} id */
+  balance: (id) => apiClient.get(`/accounts/${id}/balance`),
+
   // 잔고/포지션 (현재 별도 화면 없음, 대시보드 보유현황에서 포트폴리오 단위로 조회)
   /** GET /api/accounts/{id}/cash-balance @param {Id} id */
   cashBalance: (id) => apiClient.get(`/accounts/${id}/cash-balance`),
