@@ -1,6 +1,6 @@
 <script>
   /**
-   * 종목 구분 연결 [구현]
+   * 목표비율<-> 종목 연결 [구현]
    * 포트폴리오 선택 → 연결된 계좌들의 보유 종목이 목표비율 '구분' 중 어디에 해당하는지 지정
    * - 같은 포트폴리오 안에서는 종목이 어느 계좌에 있든 한 구분 (포트폴리오+종목 단위)
    * - 현금 잔액은 연결 없이 항상 '현금' 구분. 연결 안 된 종목은 '미분류'로 평가된다
@@ -161,7 +161,7 @@
   ];
 </script>
 
-<StandardListPage title="종목 구분 연결" columns={buildColumns([])} {actions} onReady={handleReady}>
+<StandardListPage title="목표비율<-> 종목 연결" columns={buildColumns([])} {actions} onReady={handleReady}>
   {#snippet filters()}
     <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
       <LookupComboBox
@@ -179,7 +179,7 @@
         {:else}
           <div class="text-gray-500">보유 종목 {heldCount}개 모두 구분에 연결되어 있습니다. 현금 잔액은 항상 '현금' 구분입니다.</div>
         {/if}
-        <div class="text-gray-400">'구분' 셀을 더블클릭해 종목별로 고른 뒤 [Save]를 누르면 바뀐 종목만 저장됩니다. 구분은 목표비율 관리 → 구분 관리에서 추가합니다.</div>
+        <div class="text-gray-400">'구분' 셀을 더블클릭해 종목별로 고른 뒤 [Save]를 누르면 바뀐 종목만 저장됩니다. 구분은 목표비율명 관리에서 추가합니다.</div>
       </div>
     </div>
   {/snippet}
