@@ -1,11 +1,11 @@
 <script>
   /**
    * 계좌잔고 [구현]
-   * 계좌 선택 후 [Search] → 보유 종목별 보유수량·매입단가·매입가·평가단가·평가금액·수익률,
+   * 계좌 선택 후 [Search] → 보유 종목별 보유수량·매입단가·매입가·평가단가·평가금액·평가손익·수익률,
    * 목록 아래에 주식 평가금액 / 현금잔고 / 계좌 평가금액(주식 + 현금)
    * (화면을 열거나 계좌를 바꿔도 자동으로 조회하지 않는다)
    * - 매입단가는 이동평균(매도 시 평단 유지), 수수료·세금 미포함 — 계산은 API
-   * - 평가단가는 최신 종가. 수익률 + 는 붉은색, - 는 파란색
+   * - 평가단가는 최신 종가. 평가손익 = 평가금액 - 매입가. 평가손익·수익률만 + 는 붉은색, - 는 파란색
    * API: accountApi.list / balance
    */
   import StandardListPage from '$lib/components/common/StandardListPage.svelte';
@@ -18,10 +18,11 @@
   const fmt = (v, digits) =>
     v === null || v === undefined ? '-' : Number(v).toLocaleString('ko-KR', { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
-  /** 수익률 + 는 붉은색, - 는 파란색 @param {any} rate @param {string} text */
-  const colorByRate = (rate, text) => {
-    if (rate === null || rate === undefined || Number(rate) === 0) return text;
-    return `<span class="${Number(rate) > 0 ? 'text-red-600' : 'text-blue-600'}">${text}</span>`;
+  /** 부호(+) 표시, + 는 붉은색, - 는 파란색 @param {any} v @param {number} digits */
+  const fmtSignedColor = (v, digits) => {
+    const text = v === null || v === undefined ? '-' : `${Number(v) > 0 ? '+' : ''}${fmt(v, digits)}`;
+    if (v === null || v === undefined || Number(v) === 0) return text;
+    return `<span class="${Number(v) > 0 ? 'text-red-600' : 'text-blue-600'}">${text}</span>`;
   };
 
   const columns = [
@@ -30,8 +31,9 @@
     { header: '매입단가', name: 'avgBuyPrice', align: 'right', width: 110, formatter: (/** @type {any} */ { value }) => fmt(value, 0) },
     { header: '매입가', name: 'buyAmount', align: 'right', minWidth: 130, sortable: true, formatter: (/** @type {any} */ { value }) => fmt(value, 0) },
     { header: '평가단가', name: 'currentPrice', align: 'right', width: 110, formatter: (/** @type {any} */ { value }) => fmt(value, 0) },
-    { header: '평가금액', name: 'valueAmount', align: 'right', minWidth: 130, sortable: true, formatter: (/** @type {any} */ { value, row }) => colorByRate(row.returnRate, fmt(value, 0)) },
-    { header: '수익률(%)', name: 'returnRate', align: 'right', width: 100, sortable: true, formatter: (/** @type {any} */ { value }) => colorByRate(value, `${Number(value) > 0 ? '+' : ''}${fmt(value, 2)}`) }
+    { header: '평가금액', name: 'valueAmount', align: 'right', minWidth: 130, sortable: true, formatter: (/** @type {any} */ { value }) => fmt(value, 0) },
+    { header: '평가손익', name: 'profitAmount', align: 'right', minWidth: 130, sortable: true, formatter: (/** @type {any} */ { value }) => fmtSignedColor(value, 0) },
+    { header: '수익률(%)', name: 'returnRate', align: 'right', width: 100, sortable: true, formatter: (/** @type {any} */ { value }) => fmtSignedColor(value, 2) }
   ];
 
   /** @type {any} */
@@ -70,7 +72,12 @@
     }
     try {
       const res = await accountApi.balance(accountId);
-      grid?.resetData(res?.items ?? []);
+      // 평가손익 = 평가금액 - 매입가 (시세가 없어 평가금액이 없으면 NULL)
+      const items = (res?.items ?? []).map((/** @type {any} */ i) => ({
+        ...i,
+        profitAmount: i.valueAmount === null || i.valueAmount === undefined ? null : Number(i.valueAmount) - Number(i.buyAmount ?? 0)
+      }));
+      grid?.resetData(items);
       summary = {
         cashBalanceKrw: res?.cashBalanceKrw ?? 0,
         stockValueKrw: res?.stockValueKrw ?? 0,
