@@ -22,6 +22,7 @@
     actions = [],
     filters = undefined,        // 검색 필터 영역 스니펫
     footer = undefined,         // 목록 아래 영역 스니펫 (합계 등)
+    summary = undefined,        // tui-grid summary 옵션 (그리드 하단 합계 행)
     children = undefined,       // 모달 등 부가 UI 스니펫
     onReady = () => {},          // (grid) => void
     onRowDblClick = () => {}     // (rowData, grid) => void
@@ -43,7 +44,8 @@
       bodyHeight: 'fitToParent',
       columns,
       rowHeaders: ['rowNum', 'checkbox'],
-      columnOptions: { resizable: true }
+      columnOptions: { resizable: true },
+      ...(summary ? { summary } : {})
     });
 
     setTimeout(() => grid.refreshLayout(), 100);
