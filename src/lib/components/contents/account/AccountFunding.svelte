@@ -1,12 +1,14 @@
 <script>
   /**
    * 계좌투입현황 [구현]
-   * 조회조건 없음 — 화면을 열면 바로 본인 계좌 전체를 조회한다 ([Search]로 다시 조회)
+   * 조회조건: 계좌(여러 개 선택, 비우면 전체) — 화면을 열면 전체 계좌를 바로 조회하고, 계좌를 바꾸면 [Search]로 다시 조회한다
+   *   (계좌 목록은 조회 결과의 계좌로 채운다 — 거래 없는 계좌도 결과에 포함되므로 본인 계좌 전체)
    * - 계좌별 총 입금액(입금 거래 합), 총 출금액(출금 거래 합), 계좌투입금액(= 총 입금액 - 총 출금액)
    * - 금액은 KRW 기준 (외화는 최신 환율 환산) — 계산은 API. 그리드 하단에 합계 행
    * API: accountApi.funding
    */
   import StandardListPage from '$lib/components/common/StandardListPage.svelte';
+  import MultiSelectComboBox from '$lib/components/controls/MultiSelectComboBox.svelte';
   import { BUTTON_COLORS } from '$lib/constants.js';
   import { accountApi } from '$lib/api/accountApi';
   import { codes, codeName, CODE_GROUP } from '$lib/stores/codeStore';
@@ -39,6 +41,10 @@
 
   /** @type {any} */
   let grid;
+  /** @type {Array<{value:any,label:string}>} */
+  let accountOptions = $state([]);
+  /** @type {string[]} 고른 계좌 ID (비우면 전체) */
+  let accountIds = $state([]);
 
   /** @param {unknown} error */
   function errorMessage(error) {
@@ -47,9 +53,17 @@
 
   async function loadFunding() {
     try {
-      const list = await accountApi.funding();
+      const list = (await accountApi.funding()) ?? [];
+      accountOptions = list.map((/** @type {any} */ a) => ({
+        value: String(a.accountId),
+        label: `${a.accountNumber} · ${a.name} (${codeName($codes, CODE_GROUP.BROKER, a.broker)})${a.isActive ? '' : ' · 비활성'}`
+      }));
+      // 고른 계좌가 그 사이 삭제됐으면 선택에서 뺀다
+      accountIds = accountIds.filter((id) => accountOptions.some((o) => o.value === id));
       grid?.resetData(
-        (list ?? []).map((/** @type {any} */ a) => ({ ...a, brokerName: codeName($codes, CODE_GROUP.BROKER, a.broker) }))
+        list
+          .filter((/** @type {any} */ a) => accountIds.length === 0 || accountIds.includes(String(a.accountId)))
+          .map((/** @type {any} */ a) => ({ ...a, brokerName: codeName($codes, CODE_GROUP.BROKER, a.broker) }))
       );
     } catch (error) {
       console.error('Failed to load funding:', error);
@@ -66,4 +80,10 @@
   const actions = [{ label: 'Search', color: BUTTON_COLORS.INDIGO, iconType: 'search', onClick: loadFunding }];
 </script>
 
-<StandardListPage title="계좌투입현황" {columns} {actions} {summary} onReady={handleReady} />
+<StandardListPage title="계좌투입현황" {columns} {actions} {summary} rowHeaders={['rowNum']} onReady={handleReady}>
+  {#snippet filters()}
+    <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
+      <MultiSelectComboBox id="af-account" label="계좌" class="sm:col-span-2" options={accountOptions} bind:value={accountIds} placeholder="전체" />
+    </div>
+  {/snippet}
+</StandardListPage>
