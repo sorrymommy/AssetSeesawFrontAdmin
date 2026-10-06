@@ -27,6 +27,7 @@
   import AccountBalance from '$lib/components/contents/account/AccountBalance.svelte';
   import AccountFunding from '$lib/components/contents/account/AccountFunding.svelte';
   import TransactionList from '$lib/components/contents/transaction/TransactionList.svelte';
+  import DividendList from '$lib/components/contents/transaction/DividendList.svelte';
   // ── 대분류 5. 기준정보
   import StockManagement from '$lib/components/contents/stock/StockManagement.svelte';
   import ExchangeRateList from '$lib/components/contents/master/ExchangeRateList.svelte';
@@ -111,7 +112,10 @@
         menuTab('account-balance', '계좌잔고', AccountBalance),
         menuTab('account-funding', '계좌투입현황', AccountFunding)
       ] },
-      { label: '거래 관리', icon: ICON.receipt, children: [menuTab('transactions', '거래 내역', TransactionList)] }
+      { label: '거래 관리', icon: ICON.receipt, children: [
+        menuTab('transactions', '거래 내역', TransactionList),
+        menuTab('dividends', '배당조회', DividendList)
+      ] }
     ],
     master: [
       { label: '종목', icon: ICON.tag, children: [menuTab('stocks', '종목 관리', StockManagement)] },
