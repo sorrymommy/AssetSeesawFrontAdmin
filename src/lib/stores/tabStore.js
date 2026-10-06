@@ -9,7 +9,7 @@ import { writable } from 'svelte/store';
  */
 
 function createTabStore() {
-  const { subscribe, update } = writable({
+  const { subscribe, set, update } = writable({
     /** @type {Tab[]} */
     tabs: [],
     /** @type {string | null} */
@@ -51,7 +51,9 @@ function createTabStore() {
      * Set active tab
      * @param {string} id
      */
-    setActiveTab: (id) => update(state => ({ ...state, activeTabId: id }))
+    setActiveTab: (id) => update(state => ({ ...state, activeTabId: id })),
+    /** Close all tabs (on logout — the next login starts fresh) */
+    closeAll: () => set({ tabs: [], activeTabId: null })
   };
 }
 

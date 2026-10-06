@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store';
 import { browser } from '$app/environment';
+import { tabStore } from './tabStore';
 
 const defaultValue = {
   isAuthenticated: false,
@@ -36,9 +37,10 @@ const initialValue = loadInitialValue();
 
 export const authStore = writable(initialValue);
 
-/** 로그아웃 — 저장된 인증 정보를 지운다 (화면 이동은 호출하는 쪽에서) */
+/** 로그아웃 — 저장된 인증 정보와 열린 탭을 지운다 (화면 이동은 호출하는 쪽에서) */
 export function clearAuth() {
   authStore.set(defaultValue);
+  tabStore.closeAll();
 }
 
 if (browser) {
