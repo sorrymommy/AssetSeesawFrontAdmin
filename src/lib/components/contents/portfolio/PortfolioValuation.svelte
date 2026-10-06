@@ -2,6 +2,8 @@
   /**
    * 포트폴리오 평가 [구현]
    * 포트폴리오 선택 후 [Search] → 목표비율별 목표비중 vs 평가비중·평가액·괴리 (목표 대비 + 붉은색, - 파란색)
+   * - 괴리(절대) = 평가비중 - 목표비중(%p), 괴리(상대) = (평가비중 - 목표비중) / 목표비중 × 100(%) — 목표비중이 0이면 상대는 '-'
+   * - 밴드(5%,25%): |괴리(절대)| ≥ 5 또는 |괴리(상대)| ≥ 25 이면 '밴드이탈'(파란색 굵게), 아니면 '밴드안'. 목표가 없으면 빈칸
    * (화면을 열거나 포트폴리오를 바꿔도 자동으로 조회하지 않는다)
    * - 구분 행 아래에 종목 행(트리). 종목 목표비중(전체 대비) = 구분 목표비중 × 세부비율 — 세부비율이 있는 구분만
    *   (세부비율을 안 넣은 구분의 종목은 목표 없이 평가만, 세부비율이 있지만 지금은 연결이 바뀐 종목은 '연결 해제' 평가액 0)
@@ -33,6 +35,10 @@
     return `<span class="${Number(gap) > 0 ? 'text-red-600' : 'text-blue-600'}">${text}</span>`;
   };
 
+  /** 밴드 기준 — 괴리(절대) %p, 괴리(상대) % */
+  const BAND_ABS = 5;
+  const BAND_REL = 25;
+
   const columns = [
     { header: '목표비율명 / 종목', name: 'categoryName', minWidth: 220 },
     // 구분 행: 세부비율 입력 여부, 종목 행: 구분 안 세부비율
@@ -42,8 +48,17 @@
     { header: '평가액', name: 'valueKrw', align: 'right', minWidth: 140, sortable: true, formatter: (/** @type {any} */ { value, row }) => colorByGap(row, fmt(value, 0)) },
     // 평가액 - (총평가액 × 목표비중). + 는 목표보다 많음(매도 쪽), - 는 부족(매수 쪽)
     { header: '괴리금액', name: 'gapValueKrw', align: 'right', minWidth: 140, formatter: (/** @type {any} */ { value, row }) => colorByGap(row, fmtSigned(value, 0)) },
-    // 평가비중 - 목표비중
-    { header: '괴리(%p)', name: 'gap', align: 'right', width: 100, formatter: (/** @type {any} */ { value, row }) => colorByGap(row, fmtSigned(value, 2)) }
+    // 평가비중 - 목표비중 (%p)
+    { header: '괴리(절대)', name: 'gap', align: 'right', width: 100, formatter: (/** @type {any} */ { value, row }) => colorByGap(row, fmtSigned(value, 2)) },
+    // (평가비중 - 목표비중) / 목표비중 × 100 (%)
+    { header: '괴리(상대)', name: 'gapRate', align: 'right', width: 100, formatter: (/** @type {any} */ { value, row }) => colorByGap(row, fmtSigned(value, 2)) },
+    {
+      header: `밴드(${BAND_ABS}%,${BAND_REL}%)`,
+      name: 'band',
+      align: 'center',
+      width: 110,
+      formatter: (/** @type {any} */ { value }) => (value === 'OUT' ? '<span class="font-bold text-blue-600">밴드이탈</span>' : value === 'IN' ? '밴드안' : '')
+    }
   ];
 
   /** 총평가액 — 트리라 그리드 합계(sum)는 종목 행까지 더하므로 API 값을 쓴다 */
@@ -61,11 +76,14 @@
 
   const treeColumnOptions = { name: 'categoryName', useIcon: false };
 
-  /** 목표액·괴리금액 계산 (목표가 없으면 NULL) @param {any} i */
+  /** 목표액·괴리금액·괴리(상대)·밴드 계산 (목표가 없으면 NULL, 괴리(상대)는 목표비중 0이어도 NULL) @param {any} i */
   function withGapValue(i) {
     const hasWeight = i.targetWeight !== null && i.targetWeight !== undefined;
     const targetValueKrw = hasWeight ? (totalValueKrw * Number(i.targetWeight)) / 100 : null;
-    return { ...i, targetValueKrw, gapValueKrw: targetValueKrw === null ? null : Number(i.valueKrw ?? 0) - targetValueKrw };
+    const hasGap = i.gap !== null && i.gap !== undefined;
+    const gapRate = hasGap && hasWeight && Number(i.targetWeight) !== 0 ? (Number(i.gap) / Number(i.targetWeight)) * 100 : null;
+    const band = !hasGap ? null : Math.abs(Number(i.gap)) >= BAND_ABS || (gapRate !== null && Math.abs(gapRate) >= BAND_REL) ? 'OUT' : 'IN';
+    return { ...i, targetValueKrw, gapValueKrw: targetValueKrw === null ? null : Number(i.valueKrw ?? 0) - targetValueKrw, gapRate, band };
   }
 
   /** 종목 행 표시명 @param {any} s */
@@ -141,7 +159,7 @@
   const actions = [{ label: 'Search', color: BUTTON_COLORS.INDIGO, iconType: 'search', onClick: loadValuation }];
 </script>
 
-<StandardListPage title="포트폴리오 평가" {columns} {actions} {summary} {treeColumnOptions} onReady={handleReady}>
+<StandardListPage title="포트폴리오 평가" {columns} {actions} {summary} {treeColumnOptions} rowHeaders={['rowNum']} onReady={handleReady}>
   {#snippet filters()}
     <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
       <LookupComboBox
