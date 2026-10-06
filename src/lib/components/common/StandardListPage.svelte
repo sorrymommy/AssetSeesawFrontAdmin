@@ -24,6 +24,7 @@
     footer = undefined,         // 목록 아래 영역 스니펫 (합계 등)
     summary = undefined,        // tui-grid summary 옵션 (그리드 하단 합계 행)
     treeColumnOptions = undefined, // tui-grid 트리 옵션 (행의 _children 으로 하위 행 표시)
+    rowHeaders = ['rowNum', 'checkbox'], // tui-grid 행 헤더 (체크박스가 필요 없는 조회 화면은 ['rowNum'])
     children = undefined,       // 모달 등 부가 UI 스니펫
     onReady = () => {},          // (grid) => void
     onRowDblClick = () => {}     // (rowData, grid) => void
@@ -46,7 +47,7 @@
       scrollY: true,
       bodyHeight: 'fitToParent',
       columns,
-      rowHeaders: ['rowNum', 'checkbox'],
+      rowHeaders,
       columnOptions: { resizable: true },
       ...(summary ? { summary } : {}),
       ...(treeColumnOptions ? { treeColumnOptions } : {})
