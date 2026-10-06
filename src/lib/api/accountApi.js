@@ -21,6 +21,8 @@ export const accountApi = {
 
   /** GET /api/accounts/{id}/balance — 계좌잔고 (종목별 매입·평가 + 현금잔고 + 총평가액) @param {Id} id */
   balance: (id) => apiClient.get(`/accounts/${id}/balance`),
+  // GET /api/accounts/funding — 계좌투입현황 (계좌별 총 입금·총 출금·투입금액, KRW)
+  funding: () => apiClient.get('/accounts/funding'),
 
   // 잔고/포지션 (현재 별도 화면 없음, 대시보드 보유현황에서 포트폴리오 단위로 조회)
   /** GET /api/accounts/{id}/cash-balance @param {Id} id */
