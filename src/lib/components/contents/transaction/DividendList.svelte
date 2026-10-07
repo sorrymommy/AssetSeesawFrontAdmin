@@ -1,7 +1,7 @@
 <script>
   /**
    * 배당조회 [구현] — 마스터(종목별 배당 합계)·디테일(선택한 종목의 배당 기록) 그리드
-   * - 조회조건: 계좌(전체 가능), 기간(시작일~종료일, 기본 올해), 종목(비우면 전체)
+   * - 조회조건: 계좌(다중 선택, 비우면 전체), 기간(시작일~종료일, 기본 올해), 종목(비우면 전체)
    * - 마스터: 기간 내 배당(DIVIDEND) 거래를 종목·통화별로 합산 — 건수, 배당금(세전), 세금(원천징수), 세후(= 배당금 - 세금)
    * - 디테일: 마스터에서 고른 종목의 배당 기록 (배당일 내림차순)
    * - 종목 없이 입력한 배당은 '(종목 미지정)'으로 묶는다
@@ -10,7 +10,7 @@
   import { onMount, onDestroy } from 'svelte';
   import 'tui-grid/dist/tui-grid.css';
   import UiButton from '$lib/components/controls/Button.svelte';
-  import LookupComboBox from '$lib/components/controls/LookupComboBox.svelte';
+  import MultiSelectComboBox from '$lib/components/controls/MultiSelectComboBox.svelte';
   import { BUTTON_COLORS } from '$lib/constants.js';
   import { transactionApi } from '$lib/api/transactionApi';
   import { accountApi } from '$lib/api/accountApi';
@@ -73,7 +73,9 @@
   const stockById = $derived(new Map(stocks.map((s) => [s.stockId, s])));
 
   const thisYear = new Date().getFullYear();
-  let filter = $state({ accountId: '', from: `${thisYear}-01-01`, to: today(), stock: '' });
+  let filter = $state({ from: `${thisYear}-01-01`, to: today(), stock: '' });
+  /** @type {string[]} 선택한 계좌 ID (비우면 전체) */
+  let accountIds = $state([]);
 
   /** @type {Record<string, any[]>} 마스터 행 키 → 배당 기록 */
   let recordsByKey = {};
@@ -171,7 +173,10 @@
     }
 
     try {
-      const list = (await transactionApi.list({ txType: 'DIVIDEND', accountId: filter.accountId, stockId, from: filter.from, to: filter.to })) ?? [];
+      // API는 계좌 하나만 받는다 — 하나면 API에서, 둘 이상이면 전체를 받아 여기서 거른다
+      const accountId = accountIds.length === 1 ? accountIds[0] : undefined;
+      const fetched = (await transactionApi.list({ txType: 'DIVIDEND', accountId, stockId, from: filter.from, to: filter.to })) ?? [];
+      const list = accountIds.length > 1 ? fetched.filter((/** @type {any} */ t) => accountIds.includes(String(t.accountId))) : fetched;
       const accountName = new Map(accounts.map((a) => [a.accountId, a.name]));
 
       // 종목·통화별로 묶는다 (통화가 다르면 합산하지 않는다)
@@ -227,7 +232,7 @@
 <div class="absolute inset-0 flex flex-col p-4 gap-3">
   <div class="bg-white p-3 rounded-lg shadow-sm border border-gray-200">
     <form class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-7 gap-4 items-end" onsubmit={(e) => { e.preventDefault(); loadDividends(); }}>
-      <LookupComboBox id="dv-account" label="계좌" options={accountOptions} bind:value={filter.accountId} placeholder="전체" />
+      <MultiSelectComboBox id="dv-account" label="계좌" options={accountOptions} bind:value={accountIds} placeholder="전체" />
       <div>
         <label for="dv-from" class="block text-xs font-medium text-gray-700 mb-1">시작일</label>
         <input id="dv-from" type="date" bind:value={filter.from} class={filterInputClass} />
