@@ -78,7 +78,7 @@
       const list = (await accountApi.funding()) ?? [];
       accountOptions = list.map((/** @type {any} */ a) => ({
         value: String(a.accountId),
-        label: `${a.accountNumber} · ${a.name} (${codeName($codes, CODE_GROUP.BROKER, a.broker)})${a.isActive ? '' : ' · 비활성'}`
+        label: `${a.name}-${a.accountNumber}${a.isActive ? '' : ' · 비활성'}`
       }));
       // 고른 계좌가 그 사이 삭제됐으면 선택에서 뺀다
       accountIds = accountIds.filter((id) => accountOptions.some((o) => o.value === id));

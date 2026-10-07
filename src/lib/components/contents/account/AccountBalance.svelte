@@ -12,7 +12,6 @@
   import LookupComboBox from '$lib/components/controls/LookupComboBox.svelte';
   import { BUTTON_COLORS } from '$lib/constants.js';
   import { accountApi } from '$lib/api/accountApi';
-  import { codes, codeName, CODE_GROUP } from '$lib/stores/codeStore';
 
   /** @param {any} v @param {number} digits */
   const fmt = (v, digits) =>
@@ -56,7 +55,7 @@
       const list = await accountApi.list();
       accountOptions = (list ?? []).map((/** @type {any} */ a) => ({
         value: String(a.accountId),
-        label: `${a.accountNumber} · ${a.name} (${codeName($codes, CODE_GROUP.BROKER, a.broker)})${a.isActive ? '' : ' · 비활성'}`
+        label: `${a.name}-${a.accountNumber}${a.isActive ? '' : ' · 비활성'}`
       }));
       if (accountOptions.length > 0) accountId = String(accountOptions[0].value);
     } catch (error) {

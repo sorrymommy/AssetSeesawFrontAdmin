@@ -49,7 +49,7 @@
   let stockById = $derived(new Map(stocks.map((s) => [s.stockId, s])));
   /** @type {Map<string, any>} datalist 표시 문자열 → 종목 (활성 종목만 선택 가능) */
   let stockByLabel = $derived(new Map(stocks.filter((s) => s.isActive).map((s) => [stockLabel(s), s])));
-  const accountOptions = $derived(accounts.map((a) => ({ value: String(a.accountId), label: a.name })));
+  const accountOptions = $derived(accounts.map((a) => ({ value: String(a.accountId), label: `${a.name}-${a.accountNumber}${a.isActive ? '' : ' · 비활성'}` })));
 
   let filter = $state({ accountId: '', txType: '', stock: '', from: '', to: '' });
 
